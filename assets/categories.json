@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "kitchen-remodeling",
+      "label": "Kitchen Remodeling",
+      "aliases": ["kitchen", "cabinetry", "countertops"]
+    },
+    {
+      "id": "bathroom-remodeling",
+      "label": "Bathroom Remodeling",
+      "aliases": ["bathroom", "bath", "shower"]
+    },
+    {
+      "id": "exteriors",
+      "label": "Exteriors",
+      "aliases": ["exterior", "facade", "outdoor"]
+    },
+    {
+      "id": "interiors",
+      "label": "Interiors",
+      "aliases": ["interior", "living-room", "bedroom"]
+    },
+    {
+      "id": "team",
+      "label": "Team",
+      "aliases": ["staff", "crew", "portrait"]
+    },
+    {
+      "id": "before-after",
+      "label": "Before and After",
+      "aliases": ["before", "after", "transformation"]
+    },
+    {
+      "id": "uncategorized",
+      "label": "Uncategorized",
+      "aliases": []
+    }
+  ]
+}

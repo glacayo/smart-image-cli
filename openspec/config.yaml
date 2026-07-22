@@ -1,0 +1,49 @@
+schema: spec-driven
+
+context: |
+  Project: img-ia-analyzer-resizer — global console tool for developers/agents
+  Stack: greenfield; no language chosen yet (Node 24, Go 1.26, Python 3.14, Bun 1.3 available)
+  Architecture: CLI tool; AI image analysis, rename/classify, per-folder indexes, optimize (JPG/PNG/AVIF/WEBP), resize/crop, section selection, used-tracking
+  Testing: none detected (no runner, no linter, no formatter)
+  Style: TBD — no conventions detected yet
+
+strict_tdd: false
+tdd_reason: no test runner detected; strict TDD unavailable until a stack is chosen and a runner is installed
+
+testing:
+  detected: 2026-07-22
+  runner: none
+  layers:
+    unit: unavailable
+    integration: unavailable
+    e2e: unavailable
+  coverage:
+    available: false
+    command: ""
+  quality:
+    linter: unavailable
+    type_checker: unavailable
+    formatter: unavailable
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - State target language/runtime explicitly; stack choice is a proposal-level decision
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Document architecture decisions with rationale
+    - Include sequence diagrams for complex flows (AI analysis, index read/write, section selection)
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
