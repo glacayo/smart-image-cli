@@ -33,10 +33,10 @@ Chain strategy: pending
 
 ## Phase 2: Storage / Adapters
 
-- [ ] 2.1 Implement `src/adapters/sidecar-store.ts` with temp+fsync+rename, per-sha lock covering first sidecar creation and every occurrence merge.
-- [ ] 2.2 Resolve sidecar primary policy consistently: `canonicalRelPath`, `occurrences[]`, and `primaryFlag` or `occurrences[0]` in write/rebuild paths.
-- [ ] 2.3 Implement `src/adapters/sqlite-index.ts` and usage replay so `stats` exposes raw `usageEvents` separately from deduped `usageRecords`.
-- [ ] 2.4 Implement `src/adapters/{sharp-processor,exiftool-metadata}.ts` and `src/adapters/vision/{provider,openai-compat,presets}.ts` with typed errors and redaction.
+- [x] 2.1 Implement `src/adapters/sidecar-store.ts` with temp+fsync+rename, per-sha lock covering first sidecar creation and every occurrence merge.
+- [x] 2.2 Resolve sidecar primary policy consistently: `canonicalRelPath`, `occurrences[]`, and `primaryFlag` or `occurrences[0]` in write/rebuild paths.
+- [x] 2.3 Implement `src/adapters/sqlite-index.ts` and usage replay so `stats` exposes raw `usageEvents` separately from deduped `usageRecords`.
+- [x] 2.4 Implement `src/adapters/{sharp-processor,exiftool-metadata}.ts` and `src/adapters/vision/{provider,openai-compat,presets}.ts` with typed errors and redaction.
 
 ## Phase 3: Application Services
 

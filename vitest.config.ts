@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
-    passWithNoTests: true
+    // Fail the suite if any test/describe is marked `.only` so focused tests
+    // can never accidentally mask skipped/regressed tests in CI.
+    allowOnly: false
   }
 });
