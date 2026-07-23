@@ -40,10 +40,10 @@ Chain strategy: pending
 
 ## Phase 3: Application Services
 
-- [ ] 3.1 Implement `src/app/analyze-service.ts`: walk, symlink guard, sha dedupe, dry-run, staged writes, cache hits, and unique occurrence destinations for duplicate files.
-- [ ] 3.2 Implement `src/app/optimize-service.ts`: probe, no-upscale planning, crop/resize/convert, metadata stripping, `_out/` staged writes.
-- [ ] 3.3 Implement `src/app/pick-service.ts`: constraint matching, alternatives, no-upscale, output manifest, transactional usage recording.
-- [ ] 3.4 Implement `mark-used`, `list`, `stats`, `config`, `doctor`; route `mark-used --path` through `PathGuard` before existence lookup.
+- [x] 3.1 Implement `src/app/analyze-service.ts`: walk, symlink guard, sha dedupe, dry-run, staged writes, cache hits, and unique occurrence destinations for duplicate files.
+- [x] 3.2 Implement `src/app/optimize-service.ts`: probe, no-upscale planning, crop/resize/convert, metadata stripping, `_out/` staged writes.
+- [x] 3.3 Implement `src/app/pick-service.ts`: constraint matching, alternatives, no-upscale, output manifest, transactional usage recording.
+- [x] 3.4 Implement `mark-used`, `list`, `stats`, `config`, `doctor`; route `mark-used --path` through `PathGuard` before existence lookup.
 
 ## Phase 4: Verification
 

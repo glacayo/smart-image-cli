@@ -115,6 +115,23 @@ export class SidecarStore {
     return path.join(this.sidecarDir, `${sha256}.json`);
   }
 
+  /**
+   * Validates the sidecar directory path (and its ancestor chain) stays
+   * inside the project root, including symlink/junction/reparse-point
+   * realpath semantics. Throws `StorageRootGuardError` if the sidecar
+   * directory escapes the root.
+   *
+   * Callers that enumerate the sidecar directory (e.g. `listSidecars`)
+   * MUST invoke this before `fs.readdir` so a pre-existing `.img-ia/sidecars`
+   * symlink/junction cannot redirect outside-root enumeration before
+   * per-sidecar guarded reads reject.
+   *
+   * Returns the realpath-resolved, root-confined sidecar directory path.
+   */
+  async ensureSidecarDirInside(): Promise<string> {
+    return this.guard.ensureInside(this.sidecarDir, true);
+  }
+
   private async readUnlocked(sha256: string): Promise<Sidecar | null> {
     const sidecarPath = this.pathForSha(sha256);
     try {

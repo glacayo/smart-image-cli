@@ -123,7 +123,16 @@ export class StorageRootGuard {
       stat = await fs.lstat(absolute);
     } catch (error) {
       if (isNodeError(error) && error.code === "ENOENT") {
-        // Does not exist — caller decides; treat as "no reparse to follow".
+        // The final path does not exist. A missing leaf is fine ONLY if every
+        // existing ancestor in its chain is root-confined — otherwise an
+        // escaping parent symlink/junction (e.g. `.img-ia` -> outside) with a
+        // missing final component (e.g. `config.json`) would be treated as a
+        // harmless missing path and silently bypass the root-escape check.
+        // Validate the nearest existing ancestor chain so a parent escape
+        // throws `StorageRootGuardError`; a genuinely-missing-in-root leaf
+        // returns the absolute path for the caller to treat as missing.
+        const realAncestor = await this.realpathOfNearestExistingAncestor(absolute);
+        this.assertContained(realAncestor, absolute);
         return absolute;
       }
       throw error;
