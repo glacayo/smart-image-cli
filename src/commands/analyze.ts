@@ -1,6 +1,10 @@
 import type { Command } from "commander";
 import { EXIT_CODES } from "../cli/exit-codes.js";
-import { emitResult, pendingResult } from "../cli/output.js";
+import { emitResult } from "../cli/output.js";
+import { analyzeService } from "../app/analyze-service.js";
+import { loadTaxonomy, readProjectConfig, readUserConfig, serviceError } from "../app/runtime.js";
+import { OpenAICompatVisionProvider } from "../adapters/vision/openai-compat.js";
+import { getVisionProviderPreset, type VisionProviderId } from "../adapters/vision/presets.js";
 
 export function registerAnalyzeCommand(program: Command): void {
   program
@@ -9,9 +13,37 @@ export function registerAnalyzeCommand(program: Command): void {
     .argument("<root>", "project root to scan")
     .option("--dry-run", "report planned writes without changing files")
     .option("--fail-fast", "abort on the first per-file failure")
-    .action((root: string, options: { dryRun?: boolean; failFast?: boolean }, command: Command) => {
-      const globals = command.optsWithGlobals<{ json?: boolean }>();
-      emitResult(pendingResult("analyze", { root, options }), { json: globals.json });
-      process.exitCode = EXIT_CODES.INVALID_INPUT;
-    });
+    .action(
+      async (root: string, options: { dryRun?: boolean; failFast?: boolean }, command: Command) => {
+        const globals = command.optsWithGlobals<{ json?: boolean }>();
+        try {
+          const provider = await buildProvider(root);
+          const outcome = await analyzeService(root, options, {
+            provider,
+            taxonomy: await loadTaxonomy(root)
+          });
+          emitResult(outcome.result, { json: globals.json });
+          process.exitCode = outcome.exitCode;
+        } catch (error) {
+          emitResult(serviceError("analyze", "invalid_input", error), { json: globals.json });
+          process.exitCode = EXIT_CODES.INVALID_INPUT;
+        }
+      }
+    );
+}
+
+async function buildProvider(root: string): Promise<OpenAICompatVisionProvider> {
+  const user = await readUserConfig();
+  const project = await readProjectConfig(root);
+  const id = (project.provider?.provider ?? user.activeProvider) as VisionProviderId;
+  const preset = getVisionProviderPreset(id);
+  const userProvider = user.providers[id];
+  const apiKey = userProvider?.apiKey;
+  if (!apiKey) throw new Error(`Missing per-user API key for provider: ${id}`);
+  return new OpenAICompatVisionProvider({
+    id,
+    endpoint: project.provider?.endpoint ?? userProvider.endpoint ?? preset.endpoint,
+    model: project.provider?.model ?? userProvider.model ?? preset.defaultModel,
+    apiKey
+  });
 }
