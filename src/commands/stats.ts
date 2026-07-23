@@ -9,7 +9,7 @@ export function registerStatsCommand(program: Command): void {
     .command("stats")
     .description("Summarize indexed images, occurrences, thumbnails, and usage records.")
     .argument("<root>", "project root")
-    .action(async (root: string, command: Command) => {
+    .action(async (root: string, _options: unknown, command: Command) => {
       const globals = command.optsWithGlobals<{ json?: boolean }>();
       try {
         const outcome = await statsService(root);

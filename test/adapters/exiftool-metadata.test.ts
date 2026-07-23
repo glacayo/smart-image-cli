@@ -76,6 +76,74 @@ describe("ExiftoolMetadata", () => {
     expect(writeSpy).not.toHaveBeenCalled();
   });
 
+  it("reapplyTags filters non-writable read-only/system tags before writing", async () => {
+    // Regression: ExifTool read tags include read-only/system fields
+    // (Directory, FileName, FileSize, FileType, MIMEType, ImageWidth,
+    // ImageHeight, ExifToolVersion, …) that cannot be written back. The
+    // adapter MUST filter them before reapply so `--keep-metadata` does not
+    // attempt to write `FileName`/`Directory`/etc. into optimized outputs
+    // (which ExifTool would reject or silently misapply).
+    const root = await tempRoot();
+    const input = path.join(root, "photo.jpg");
+    await fs.writeFile(input, "fake image", "utf8");
+
+    let writtenTags: Record<string, unknown> | undefined;
+    const seam: ExiftoolSeam = {
+      read: vi.fn(),
+      write: vi.fn(async (_file: string, tags: Record<string, unknown>) => {
+        writtenTags = tags;
+        return { created: 0, updated: 1, unchanged: 0 };
+      })
+    };
+
+    const metadata = new ExiftoolMetadata(undefined, seam);
+    await metadata.reapplyTags(input, {
+      // Writable tag that MUST survive the filter.
+      ImageDescription: "public caption",
+      // Read-only/system tags that MUST be filtered out before write.
+      SourceFile: "/tmp/photo.jpg",
+      Directory: "/tmp",
+      FileName: "photo.jpg",
+      FileSize: 1234,
+      FileType: "JPEG",
+      FileTypeExtension: "jpg",
+      MIMEType: "image/jpeg",
+      ExifToolVersion: 12.4,
+      ImageWidth: 200,
+      ImageHeight: 100,
+      Megapixels: 0.02,
+      EncodingProcess: "Baseline DCT",
+      BitsPerSample: 8,
+      ColorComponents: 3,
+      YCbCrSubSampling: "4:2:0"
+    });
+
+    expect(writtenTags).toBeDefined();
+    // The writable tag survives.
+    expect(writtenTags).toHaveProperty("ImageDescription", "public caption");
+    // None of the read-only/system tags are passed to the write seam.
+    const filteredKeys = [
+      "SourceFile",
+      "Directory",
+      "FileName",
+      "FileSize",
+      "FileType",
+      "FileTypeExtension",
+      "MIMEType",
+      "ExifToolVersion",
+      "ImageWidth",
+      "ImageHeight",
+      "Megapixels",
+      "EncodingProcess",
+      "BitsPerSample",
+      "ColorComponents",
+      "YCbCrSubSampling"
+    ];
+    for (const key of filteredKeys) {
+      expect(writtenTags).not.toHaveProperty(key);
+    }
+  });
+
   it("read wraps exiftool errors as MetadataError", async () => {
     const root = await tempRoot();
     const input = path.join(root, "photo.jpg");

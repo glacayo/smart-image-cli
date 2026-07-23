@@ -203,6 +203,9 @@ function normalizeSharpFormat(format: string | undefined): ImageFormat | undefin
   if (format === undefined) {
     return undefined;
   }
+  if (format === "heif") {
+    return "avif";
+  }
   return format === "jpeg" ? "jpg" : (format as ImageFormat);
 }
 
