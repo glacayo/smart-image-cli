@@ -169,13 +169,33 @@ function normalizeTags(tags: Tags): TagMap {
 function filterWritableTags(tags: TagMap): TagMap {
   const writable: TagMap = {};
   for (const [key, value] of Object.entries(tags)) {
-    if (key === "SourceFile" || key === "errors" || value === undefined) {
+    if (NON_WRITABLE_READ_TAGS.has(key) || value === undefined) {
       continue;
     }
     writable[key] = value;
   }
   return writable;
 }
+
+const NON_WRITABLE_READ_TAGS = new Set([
+  "SourceFile",
+  "errors",
+  "Directory",
+  "FileName",
+  "FilePermissions",
+  "FileSize",
+  "FileType",
+  "FileTypeExtension",
+  "MIMEType",
+  "ExifToolVersion",
+  "ImageWidth",
+  "ImageHeight",
+  "Megapixels",
+  "EncodingProcess",
+  "BitsPerSample",
+  "ColorComponents",
+  "YCbCrSubSampling"
+]);
 
 function serializeTagValue(value: unknown): unknown {
   if (value === null || value === undefined) {

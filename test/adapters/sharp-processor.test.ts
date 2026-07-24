@@ -33,6 +33,26 @@ describe("SharpProcessor", () => {
     expect(info.format).toBe("jpg");
   });
 
+  it("normalizes sharp's heif metadata report to avif on probe", async () => {
+    // Regression: sharp reports `format: "heif"` for AVIF images, but the
+    // domain `ImageFormat` union and the optimize manifest use "avif". The
+    // adapter MUST normalize heif -> avif so the manifest reports the
+    // requested format deterministically, not the libvips container name.
+    const root = await tempRoot();
+    const input = path.join(root, "input.avif");
+    const buffer = await sharp({ create: { width: 64, height: 32, channels: 3, background: "blue" } })
+      .avif()
+      .toBuffer();
+    await fs.writeFile(input, buffer);
+    // Sanity: sharp's own metadata reports heif (the raw libvips format).
+    const raw = await sharp(input).metadata();
+    expect(raw.format).toBe("heif");
+
+    const processor = new SharpProcessor();
+    const info = await processor.probe(input);
+    expect(info.format).toBe("avif");
+  });
+
   it("surfaces a DecodeError when probing invalid image bytes", async () => {
     const root = await tempRoot();
     const input = path.join(root, "not-an-image.jpg");

@@ -47,7 +47,7 @@ Chain strategy: pending
 
 ## Phase 4: Verification
 
-- [ ] 4.1 Add unit tests under `test/domain/` for Path Safety, Generated-Asset Exclusion, No Upscaling, SlotMatcher alternatives, SlugNamer collisions.
-- [ ] 4.2 Add integration tests under `test/integration/` for Recursive Discovery, Duplicates Collapsed Before AI, Sidecar Persisted, Second Run Reuses Cache, Database Rebuilt After Loss.
-- [ ] 4.3 Add optimization tests for Convert to AVIF, GPS Removed, Metadata Opt-In, Rotated Capture Normalized, Requested Size Exceeds Source, Downscale Within Bounds.
-- [ ] 4.4 Add e2e CLI tests under `test/e2e/` for JSON stdout, stable exit codes, pick no-match exit 2, invalid args exit 3, doctor readiness, and secret non-leak.
+- [x] 4.1 Add unit tests under `test/domain/` for Path Safety, Generated-Asset Exclusion, No Upscaling, SlotMatcher alternatives, SlugNamer collisions.
+- [x] 4.2 Add integration tests under `test/integration/` for Recursive Discovery, Duplicates Collapsed Before AI, Sidecar Persisted, Second Run Reuses Cache, Database Rebuilt After Loss.
+- [x] 4.3 Add optimization tests for Convert to AVIF, GPS Removed, Metadata Opt-In, Rotated Capture Normalized, Requested Size Exceeds Source, Downscale Within Bounds.
+- [x] 4.4 Add e2e CLI tests under `test/e2e/` for JSON stdout, stable exit codes, pick no-match exit 2, invalid args exit 3, doctor readiness, and secret non-leak.

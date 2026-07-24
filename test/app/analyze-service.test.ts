@@ -6,11 +6,12 @@ import { analyzeService } from "../../src/app/analyze-service.js";
 import { SidecarStore } from "../../src/adapters/sidecar-store.js";
 import type { VisionProvider } from "../../src/adapters/vision/provider.js";
 import type { Taxonomy } from "../../src/domain/taxonomy.js";
+import { rmWithRetry } from "../support/cleanup.js";
 
 const roots: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(roots.map((root) => fs.rm(root, { recursive: true, force: true })));
+  await Promise.all(roots.map((root) => rmWithRetry(root)));
   roots.length = 0;
 });
 

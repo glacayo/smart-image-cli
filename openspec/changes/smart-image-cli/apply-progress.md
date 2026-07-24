@@ -10,6 +10,7 @@ Standard (OpenSpec). `strict_tdd: false` in `openspec/config.yaml`.
 - Boundary: Phase 3 application services on branch `feat/pr3-application-services`; no commit, push, PR, archive, or Phase 4 broad e2e suite was created in this apply batch
 - Chain strategy: pending in `tasks.md`; the user explicitly assigned PR3/work unit 3 for this batch
 - Scope guard: Phase 3 services and focused app/adapter tests only; Phase 4 broad integration/e2e suite remains pending
+- Latest batch: chained PR slice / work unit 4 only on branch `feat/pr4-verification`; added broad verification/e2e coverage and fixed only blockers exposed by Phase 4 tests. No commit, push, PR, merge, or archive was performed.
 
 ## Completed Tasks
 
@@ -25,6 +26,10 @@ Standard (OpenSpec). `strict_tdd: false` in `openspec/config.yaml`.
 - [x] 3.2 Implemented `OptimizeService` with guarded input probing, explicit no-upscale planning, crop/resize/convert output through `SharpProcessor`, metadata strip-by-default, opt-in metadata reapply, and guarded `_out/` output writes.
 - [x] 3.3 Implemented `PickService` with index-read rebuild gating, slot constraint matching, close alternatives on no-match, explicit no-upscale planning, output manifest production, durable usage append, SQLite usage update, and output rollback if usage recording fails.
 - [x] 3.4 Implemented `mark-used`, `list`, `stats`, `config`, and `doctor` app services plus command routing; `mark-used --path` validates through root/path guards before existence and index lookup and returns stable `not_found` semantics.
+- [x] 4.1 Added domain verification for path traversal rejection, segment-aware generated-asset exclusion without `_outdoor` overmatch, no-upscale resize planning, bounded downscale planning, and safe slug/collision filename generation.
+- [x] 4.2 Added integration verification for recursive discovery, generated-output exclusion, duplicate collapse before AI, sidecar persistence, second-run cache reuse, and SQLite rebuild after database loss.
+- [x] 4.3 Added optimization verification for AVIF conversion, source preservation, default GPS/metadata stripping, explicit metadata opt-in, EXIF orientation tag normalization, no-upscale failure, and bounded downscale output dimensions.
+- [x] 4.4 Added e2e CLI verification for single-object JSON stdout, optimize/pick/mark-used/list/stats/config/doctor flows, stable no-match vs invalid-input exit codes, path-guard failures, analyze dry-run no-write safety under missing provider config, and doctor/config secret non-leak behavior.
 
 ## Verification
 
@@ -90,6 +95,64 @@ Standard (OpenSpec). `strict_tdd: false` in `openspec/config.yaml`.
 | `npm run format` | Passed after PR3 risk-fix batch 3 |
 | `npm run build` | Passed after PR3 risk-fix batch 3 |
 | `npm audit` | Passed; 0 vulnerabilities after PR3 risk-fix batch 3 |
+| `npm test` | Passed before PR4 edits; 15 test files / 205 tests baseline |
+| `npm test` | Passed after PR4 verification; 19 test files / 227 tests |
+| `npm run typecheck` | Passed after PR4 verification and blocker fixes |
+| `npm run lint` | Passed after PR4 verification and blocker fixes |
+| `npm run format` | Passed after adding `endOfLine: auto` and formatting the PR4-touched source files |
+| `npm run build` | Passed after PR4 verification and blocker fixes |
+| `npm audit` | Passed; 0 vulnerabilities after PR4 verification |
+| `npm test` | Passed after PR4 review-fix batch; 19 test files / 231 tests |
+| `npm run typecheck` | Passed after PR4 review-fix batch |
+| `npm run lint` | Passed after PR4 review-fix batch |
+| `npm run format` | Passed after PR4 review-fix batch |
+| `npm run build` | Passed after PR4 review-fix batch |
+| `npm audit` | Passed; 0 vulnerabilities after PR4 review-fix batch |
+| `npm test` | Passed after PR4 reliability-fix batch; 19 test files / 231 tests (count unchanged) |
+| `npm run typecheck` | Passed after PR4 reliability-fix batch |
+| `npm run lint` | Passed after PR4 reliability-fix batch |
+| `npm run format` | Passed after PR4 reliability-fix batch |
+| `npm run build` | Passed after PR4 reliability-fix batch |
+| `npm audit` | Passed; 0 vulnerabilities after PR4 reliability-fix batch |
+
+## PR4 Reliability-Fix Batch (applied on `feat/pr4-verification`)
+
+The following confirmed PR4 reliability finding was applied test-only, without source changes, Phase 4 archive, commit, push, or PR:
+
+- **Path traversal e2e can false-pass**: `test/e2e/cli-flow.test.ts` "optimizes through the CLI and rejects path traversal without writes" previously wrote the outside-root sentinel as plain text (`escape.jpg` containing `"outside-sentinel-before-traversal"`). If the root/path guard ever regressed, `optimizeService` could still probe the outside file; Sharp decode of a text file would fail and the command would return `filesystem_error` / exit 5 with no output and an unchanged sentinel — the test would falsely pass. The sentinel is now a real decodable JPEG (sharp-generated, 64x64), so a regressed guard lets probe succeed and the command proceeds to produce (or fail with a decode/write error whose message does NOT contain the guard signature). The assertion now matches the guard's `escapes (project )?root` message signature via regex, proving the failure is the root/path guard and not a decode fallback. The byte-for-byte sentinel-unchanged check is retained (now via `Buffer.compare`).
+
+## PR4 Review-Fix Batch (applied on `feat/pr4-verification`)
+
+The following confirmed PR4 review blockers/warnings were applied without expanding into Phase 4 archive scope or broad production refactors:
+
+- **CLI e2e hermetic and deterministic**: `test/e2e/cli-flow.test.ts` `runImg` now isolates config on ALL platforms — it forces `APPDATA`, `XDG_CONFIG_HOME`, and `HOME` to a throwaway temp dir (overridable per-call) so the CLI never reads the real developer's user config on Windows or POSIX. The original env is captured and restored in a `finally` so a thrown assertion cannot leak real-config reads into later tests. A docstring documents that the in-process `process.stdout.write`/`process.exitCode`/env monkey-patching MUST run serialized (the describe block is not split across files and every `it` awaits completion) and prescribes a child-process spawn replacement if the file is ever parallelized.
+- **ExifTool singleton teardown**: `test/integration/optimization-flow.test.ts` now calls `exiftool.end()` in an `afterAll` so the real `exiftool-vendored` singleton (used by `optimizeService` -> `new ExiftoolMetadata()` and the direct `exiftool` import for tag writes) does not leave a zombie native process keeping the test runner alive after the suite finishes.
+- **Strengthened Phase 4 behavior assertions**:
+  - Analyze integration (`test/integration/analyze-index-flow.test.ts`) now verifies queryable SQLite index rows (content + occurrence) after a non-dry-run analyze, not only sidecars/cache — proving analyze upserts the index so subsequent reads are queryable without a rebuild.
+  - E2E list/stats assertions (`test/e2e/cli-flow.test.ts`) now inspect parsed JSON structure/counts (image count, sha, `used` array slot+location pairs, stats totals), not `JSON.stringify(...).contains(...)` string substrings.
+  - Path traversal e2e test now creates an actual outside-root file with a sentinel before the traversal attempt and proves the guard rejects BEFORE any write — the outside file's bytes are unchanged and no sibling output appears.
+  - Rotated capture test (`test/integration/optimization-flow.test.ts`) now verifies the rotation was actually applied (output dimensions differ from a non-rotated control), not only that the orientation tag is missing. The `writeTags` helper now uses ExifTool's `-n` flag so numeric `Orientation: 6` is written as a raw int instead of being rejected with "not in PrintConv" (which previously made the test vacuous — sharp never saw the orientation and `.rotate()` was a no-op).
+- **Focused regression tests for production fixes**:
+  - `stats --json` Commander action signature: added a dedicated e2e test proving `--json` produces parseable JSON with the stats command/ok contract, locking the three-argument `(root, _options, command)` signature so a regression to the two-argument form (which silently swallows `--json`) is caught.
+  - Sharp `heif` -> `avif` metadata normalization: added a deterministic unit test in `test/adapters/sharp-processor.test.ts` that creates a real AVIF, confirms sharp reports `format: "heif"`, and asserts `SharpProcessor.probe` normalizes it to `"avif"`.
+  - ExifTool non-writable read tags filtered before reapply: added a unit test in `test/adapters/exiftool-metadata.test.ts` that injects a recording seam and asserts all read-only/system tags (`Directory`, `FileName`, `FileSize`, `FileType`, `MIMEType`, `ImageWidth`, `ImageHeight`, `ExifToolVersion`, …) are filtered out before the write seam is called, while writable tags (`ImageDescription`) survive.
+- **Readability/fixture cleanup**: Named the dimension constants in `test/domain/path-resize-slug.test.ts` (`sourceWidth`, `sourceHeight`, `requestedWidth`, `maxWidth`, `expectedHeight`) so the resize-planner assertions are self-documenting. Extracted a shared `rmWithRetry` cleanup helper into `test/support/cleanup.ts` and adopted it in `test/e2e/cli-flow.test.ts`, `test/integration/optimization-flow.test.ts`, `test/integration/analyze-index-flow.test.ts`, and `test/app/analyze-service.test.ts`.
+- **Windows cleanup retry / line endings**: The shared `rmWithRetry` helper now retries on `EBUSY`, `EPERM`, and `ENOTEMPTY` (not only `EBUSY`), covering the transient lock/permission errors Windows surfaces on freshly written files. `.prettierrc endOfLine: auto` is intentionally kept: the repo has `core.autocrlf=true` on Windows, and a repo-level `.gitattributes` (`* text=auto eol=lf`) would cause repo-wide line-ending churn that violates the focused-fix constraint. `auto` lets Prettier preserve the existing line endings per platform without fighting Git's autocrlf, so `npm run format` passes on both Windows and POSIX without mass reformatting.
+
+## Notes (PR4 review-fix additions)
+
+- **SlotMatcher coverage**: The lexicographic scoring contract (tier selection, extreme-dimension guards, reuse-vs-deficit ordering, deterministic tie-breaks) is covered by the existing `test/domain/slot-matcher.test.ts`. The Phase 4 e2e/integration tests exercise `pickService` end-to-end (which calls `matchSlot`) but do NOT duplicate the SlotMatcher unit-level invariants; those live exclusively in `test/domain/slot-matcher.test.ts`.
+- **ExifTool orientation write caveat**: ExifTool's `write` rejects numeric `Orientation` values without the `-n` flag ("Can't convert IFD0:Orientation (not in PrintConv)"). The optimization test's `writeTags` helper now passes `-n` so the orientation is stored as a raw int; without it the tag is silently not written and any rotation-assertion test becomes vacuous.
+
+## PR4 Verification Batch (applied on `feat/pr4-verification`)
+
+The following Phase 4 verification work was completed without reworking Phase 1-3 implementation beyond blockers exposed by the new tests:
+
+- **Domain verification**: Added `test/domain/path-resize-slug.test.ts` covering path traversal rejection, generated-dir segment predicates (including `_out` vs `_outdoor`), configured output-dir exclusions, explicit no-upscale planning, downscale-within-bounds planning, and safe generated filename/collision behavior.
+- **Analyze/index integration verification**: Added `test/integration/analyze-index-flow.test.ts` covering recursive discovery through nested folders, unsupported-file ignores, generated output exclusion, duplicate AI-call collapse, sidecar persistence, second-run cache reuse, and database rebuild after deleting `index.sqlite`.
+- **Optimization integration verification**: Added `test/integration/optimization-flow.test.ts` covering AVIF output, source preservation, default metadata/GPS stripping, explicit metadata opt-in, orientation-tag normalization, target-exceeds-source failure before writes, and downscale output dimensions.
+- **CLI e2e verification**: Added `test/e2e/cli-flow.test.ts` covering JSON stdout shape, pick/mark-used/list/stats contracts, no-match exit 2, invalid input exit 3, optimize path-guard exit 5 with no escape write, analyze dry-run no-write behavior when provider config is missing, project-config secret rejection, and doctor redaction.
+- **Phase 4 blocker fixes**: Fixed `stats` command's no-option Commander action signature so CLI `stats` can access global options; normalized Sharp's AVIF metadata report (`heif`) back to the requested `avif` manifest format; filtered ExifTool read-only/system tags before metadata reapply so `--keep-metadata` preserves writable metadata without attempting to write `FileName`/`Directory` back into optimized outputs; set Prettier `endOfLine: auto` so repository CRLF/LF differences do not fail `npm run format` on Windows.
 
 ## PR3 Risk-Fix Batch 3 (applied on `feat/pr3-application-services`)
 
