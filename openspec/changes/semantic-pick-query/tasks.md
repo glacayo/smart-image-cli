@@ -11,7 +11,7 @@
 | Delivery strategy       | ask-on-risk                                                           |
 | Chain strategy          | stacked-to-main                                                       |
 
-Decision needed before apply: No — maintainer selected chained PR delivery; current scope is PR1 / work unit 1 only.
+Decision needed before apply: No — maintainer selected chained PR delivery; current scope is PR2 / work unit 2 only.
 Chained PRs recommended: Yes
 Chain strategy: stacked-to-main
 400-line budget risk: High
@@ -34,9 +34,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: AI Text Ranker
 
-- [ ] 2.1 Create `src/adapters/vision/text-ranker-openai-compat.ts` for metadata-only POST, cap 25/hard 50, strict zod JSON, redacted reason max 240.
-- [ ] 2.2 Modify `src/app/runtime.ts` with `buildTextRankerProvider(root)` using existing provider config precedence; do not pass image paths or bytes.
-- [ ] 2.3 Add `test/adapters/text-ranker-openai-compat.test.ts` for no `image_url`/base64, payload cap, malformed JSON, unknown sha, redaction, 429, timeout, and refusal.
+- [x] 2.1 Create `src/adapters/vision/text-ranker-openai-compat.ts` for metadata-only POST, cap 25/hard 50, strict zod JSON, redacted reason max 240.
+- [x] 2.2 Modify `src/app/runtime.ts` with `buildTextRankerProvider(root)` using existing provider config precedence; do not pass image paths or bytes.
+- [x] 2.3 Add `test/adapters/text-ranker-openai-compat.test.ts` for no `image_url`/base64, payload cap, malformed JSON, unknown sha, redaction, 429, timeout, and refusal.
 
 ## Phase 3: Pick Service / CLI Wiring
 

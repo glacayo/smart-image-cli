@@ -14,6 +14,7 @@ import {
   getUserConfigPath,
   parseUserConfig,
   emptyUserConfig,
+  type ProviderConfig,
   type UserConfig
 } from "../config/user-config.js";
 import { resolveInside } from "../domain/path-guard.js";
@@ -22,6 +23,8 @@ import type { SqliteIndex, UsageEvent } from "../adapters/sqlite-index.js";
 import type { SidecarStore, Sidecar } from "../adapters/sidecar-store.js";
 import { StorageRootGuard, fsyncDirectoryHonest } from "../adapters/storage-root-guard.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
+import { OpenAICompatTextRanker } from "../adapters/vision/text-ranker-openai-compat.js";
+import { getVisionProviderPreset, type VisionProviderId } from "../adapters/vision/presets.js";
 
 export const SUPPORTED_IMAGE_EXTENSIONS = new Set([
   ".jpg",
@@ -36,6 +39,22 @@ export const SUPPORTED_IMAGE_EXTENSIONS = new Set([
 export type ServiceOutcome = {
   result: CliResult;
   exitCode: number;
+};
+
+export type ResolvedProviderConfig = {
+  id: VisionProviderId;
+  endpoint: string;
+  model: string;
+  apiKey: string;
+};
+
+type ResolveProviderConfigOptions = {
+  /**
+   * Project config is repository-controlled, while provider API keys are
+   * user-scoped. Keep this true for legacy analyze behavior, but disable it for
+   * text ranking so a checked-in endpoint cannot route a user's key elsewhere.
+   */
+  allowProjectEndpointOverride?: boolean;
 };
 
 export async function sha256File(filePath: string): Promise<string> {
@@ -82,6 +101,64 @@ export async function readProjectConfig(root: string) {
 export async function readUserConfig(configPath = getUserConfigPath()): Promise<UserConfig> {
   const raw = await readJsonIfExists(configPath);
   return raw === undefined ? emptyUserConfig() : parseUserConfig(raw);
+}
+
+export async function resolveProviderConfig(
+  root: string,
+  options: ResolveProviderConfigOptions = {}
+): Promise<ResolvedProviderConfig> {
+  const user = await readUserConfig();
+  const project = await readProjectConfig(root);
+  const id = (project.provider?.provider ?? user.activeProvider) as VisionProviderId;
+  const preset = getVisionProviderPreset(id);
+  const userProvider = user.providers[id];
+  const apiKey = userProvider?.apiKey;
+  if (!apiKey) throw new Error(`Missing per-user API key for provider: ${id}`);
+
+  const userOrPresetEndpoint = userProvider.endpoint ?? preset.endpoint;
+  if (options.allowProjectEndpointOverride === false) {
+    rejectUntrustedProjectEndpoint(project.provider, userOrPresetEndpoint);
+  }
+
+  return {
+    id,
+    endpoint:
+      options.allowProjectEndpointOverride === false
+        ? userOrPresetEndpoint
+        : (project.provider?.endpoint ?? userOrPresetEndpoint),
+    model: project.provider?.model ?? userProvider.model ?? preset.defaultModel,
+    apiKey
+  };
+}
+
+export async function buildTextRankerProvider(root: string): Promise<OpenAICompatTextRanker> {
+  const provider = await resolveProviderConfig(root, { allowProjectEndpointOverride: false });
+  return new OpenAICompatTextRanker({
+    id: provider.id,
+    endpoint: provider.endpoint,
+    model: provider.model,
+    apiKey: provider.apiKey
+  });
+}
+
+function rejectUntrustedProjectEndpoint(
+  projectProvider: Pick<ProviderConfig, "endpoint"> | undefined,
+  trustedEndpoint: string
+): void {
+  if (
+    projectProvider?.endpoint === undefined ||
+    normalizeProviderEndpoint(projectProvider.endpoint) ===
+      normalizeProviderEndpoint(trustedEndpoint)
+  ) {
+    return;
+  }
+  throw new Error(
+    "Project provider endpoint overrides are not trusted for text ranking; configure custom endpoints in user config so the endpoint and API key share the same trust boundary."
+  );
+}
+
+function normalizeProviderEndpoint(endpoint: string): string {
+  return endpoint.replace(/\/+$/, "");
 }
 
 export async function writeUserConfig(
