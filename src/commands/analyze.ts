@@ -2,9 +2,8 @@ import type { Command } from "commander";
 import { EXIT_CODES } from "../cli/exit-codes.js";
 import { emitResult } from "../cli/output.js";
 import { analyzeService } from "../app/analyze-service.js";
-import { loadTaxonomy, readProjectConfig, readUserConfig, serviceError } from "../app/runtime.js";
+import { loadTaxonomy, resolveProviderConfig, serviceError } from "../app/runtime.js";
 import { OpenAICompatVisionProvider } from "../adapters/vision/openai-compat.js";
-import { getVisionProviderPreset, type VisionProviderId } from "../adapters/vision/presets.js";
 
 export function registerAnalyzeCommand(program: Command): void {
   program
@@ -33,17 +32,11 @@ export function registerAnalyzeCommand(program: Command): void {
 }
 
 async function buildProvider(root: string): Promise<OpenAICompatVisionProvider> {
-  const user = await readUserConfig();
-  const project = await readProjectConfig(root);
-  const id = (project.provider?.provider ?? user.activeProvider) as VisionProviderId;
-  const preset = getVisionProviderPreset(id);
-  const userProvider = user.providers[id];
-  const apiKey = userProvider?.apiKey;
-  if (!apiKey) throw new Error(`Missing per-user API key for provider: ${id}`);
+  const provider = await resolveProviderConfig(root);
   return new OpenAICompatVisionProvider({
-    id,
-    endpoint: project.provider?.endpoint ?? userProvider.endpoint ?? preset.endpoint,
-    model: project.provider?.model ?? userProvider.model ?? preset.defaultModel,
-    apiKey
+    id: provider.id,
+    endpoint: provider.endpoint,
+    model: provider.model,
+    apiKey: provider.apiKey
   });
 }

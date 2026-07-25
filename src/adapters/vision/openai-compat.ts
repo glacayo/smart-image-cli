@@ -1,13 +1,11 @@
 import { parseImageAnalysis } from "../../domain/analysis-schema.js";
 import { defaultSecretRedactor, type SecretRedactor } from "../secret-redactor.js";
 import {
-  MalformedOutputProviderError,
-  RateLimitProviderError,
-  RefusalProviderError,
-  TimeoutProviderError,
-  type VisionInput,
-  type VisionProvider
-} from "./provider.js";
+  extractChatCompletionText,
+  postChatCompletion,
+  stripJsonFence
+} from "./openai-compat-transport.js";
+import { MalformedOutputProviderError, type VisionInput, type VisionProvider } from "./provider.js";
 
 export type OpenAICompatVisionOptions = {
   id: string;
@@ -18,21 +16,6 @@ export type OpenAICompatVisionOptions = {
   redactor?: SecretRedactor;
   fetchImpl?: typeof fetch;
 };
-
-type ChatCompletionResponse = {
-  choices?: Array<{
-    finish_reason?: string;
-    message?: {
-      content?: string | Array<{ type?: string; text?: string }>;
-      refusal?: string;
-    };
-  }>;
-  error?: unknown;
-};
-
-type ChatMessageContent = NonNullable<
-  NonNullable<ChatCompletionResponse["choices"]>[number]["message"]
->["content"];
 
 export class OpenAICompatVisionProvider implements VisionProvider {
   readonly id: string;
@@ -54,52 +37,20 @@ export class OpenAICompatVisionProvider implements VisionProvider {
   }
 
   async analyze(input: VisionInput) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const body = await postChatCompletion({
+      endpoint: this.endpoint,
+      apiKey: this.apiKey,
+      body: this.requestBody(input),
+      timeoutMs: this.timeoutMs,
+      fetchImpl: this.fetchImpl,
+      redactor: this.redactor,
+      rateLimitMessage: "Vision provider rate limit",
+      httpErrorMessage: (status) => `Vision provider returned HTTP ${status}`,
+      nonJsonMessage: "Vision provider returned non-JSON response",
+      requestFailedMessage: "Vision provider request failed"
+    });
 
-    try {
-      const response = await this.fetchImpl(`${this.endpoint}/chat/completions`, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify(this.requestBody(input))
-      });
-
-      const bodyText = await response.text();
-      if (response.status === 429) {
-        throw new RateLimitProviderError("Vision provider rate limit", this.redact(bodyText));
-      }
-      if (!response.ok) {
-        throw new MalformedOutputProviderError(
-          `Vision provider returned HTTP ${response.status}`,
-          this.redact(bodyText)
-        );
-      }
-
-      return this.parseResponse(bodyText);
-    } catch (error) {
-      if (
-        error instanceof RateLimitProviderError ||
-        error instanceof MalformedOutputProviderError ||
-        error instanceof RefusalProviderError ||
-        error instanceof TimeoutProviderError
-      ) {
-        throw error;
-      }
-      if (isAbortError(error)) {
-        throw new TimeoutProviderError("Vision provider request timed out", undefined, {
-          cause: error
-        });
-      }
-      throw new MalformedOutputProviderError("Vision provider request failed", this.redact(error), {
-        cause: error
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+    return this.parseResponse(body);
   }
 
   private requestBody(input: VisionInput): unknown {
@@ -123,46 +74,14 @@ export class OpenAICompatVisionProvider implements VisionProvider {
     };
   }
 
-  private parseResponse(bodyText: string) {
-    let body: ChatCompletionResponse;
-    try {
-      body = JSON.parse(bodyText) as ChatCompletionResponse;
-    } catch (error) {
-      throw new MalformedOutputProviderError(
-        "Vision provider returned non-JSON response",
-        this.redact(bodyText),
-        {
-          cause: error
-        }
-      );
-    }
-
-    if (body.error !== undefined) {
-      throw new MalformedOutputProviderError(
-        "Vision provider returned an error body",
-        this.redact(body.error)
-      );
-    }
-
-    const choice = body.choices?.[0];
-    const refusal = choice?.message?.refusal;
-    if (
-      choice?.finish_reason === "content_filter" ||
-      (refusal !== undefined && refusal.length > 0)
-    ) {
-      throw new RefusalProviderError(
-        "Vision provider refused image analysis",
-        this.redact(refusal ?? body)
-      );
-    }
-
-    const content = extractTextContent(choice?.message?.content);
-    if (content === null) {
-      throw new MalformedOutputProviderError(
-        "Vision provider response had no text content",
-        this.redact(body)
-      );
-    }
+  private parseResponse(body: Parameters<typeof extractChatCompletionText>[0]["body"]) {
+    const content = extractChatCompletionText({
+      body,
+      redactor: this.redactor,
+      errorBodyMessage: "Vision provider returned an error body",
+      refusalMessage: "Vision provider refused image analysis",
+      noTextMessage: "Vision provider response had no text content"
+    });
 
     try {
       return parseImageAnalysis(JSON.parse(stripJsonFence(content)));
@@ -180,31 +99,4 @@ export class OpenAICompatVisionProvider implements VisionProvider {
   private redact(value: unknown): unknown {
     return this.redactor.maskValue(value);
   }
-}
-
-function extractTextContent(content: ChatMessageContent): string | null {
-  if (typeof content === "string") {
-    return content;
-  }
-  if (Array.isArray(content)) {
-    return content
-      .filter(
-        (part): part is { type?: string; text: string } =>
-          part.type === "text" && typeof part.text === "string"
-      )
-      .map((part) => part.text)
-      .join("\n");
-  }
-  return null;
-}
-
-function stripJsonFence(content: string): string {
-  return content
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
 }

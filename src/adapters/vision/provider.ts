@@ -26,6 +26,17 @@ export type RankingEntry = {
   reason: string;
 };
 
+/**
+ * Ranks candidate metadata for semantic image selection.
+ *
+ * Implementations MUST return entries for input candidates only, MUST NOT emit
+ * duplicate sha256 values, and SHOULD order results by descending relevance
+ * with a deterministic tie-break. Partial rankings are valid: a provider MAY
+ * omit candidates it did not rank (for example because of provider confidence
+ * or payload caps). Phase 3 callers must treat omitted candidates as unranked
+ * rather than inventing scores for them. The local ranker returns every input
+ * candidate; remote rankers may return a subset.
+ */
 export interface TextRankerProvider {
   readonly id: string;
   rank(query: string, candidates: readonly RankingCandidateMeta[]): Promise<RankingEntry[]>;
