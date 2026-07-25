@@ -255,4 +255,51 @@ describe("slot-matcher lexicographic scoring", () => {
       expect(result.candidate.sha256).toBe("reused");
     }
   });
+
+  it("excludes orientation mismatches from eligible semantic ranking candidates", () => {
+    const wrongOrientation = baseCandidate({
+      sha256: "wrong-orientation",
+      orientation: "portrait"
+    });
+    const eligible = baseCandidate({ sha256: "eligible" });
+
+    const result = matchSlot([wrongOrientation, eligible], baseRequest());
+
+    expect(result.ok).toBe(true);
+    expect(result.eligible.map((alternative) => alternative.candidate.sha256)).toEqual([
+      "eligible"
+    ]);
+  });
+
+  it("excludes dimension deficits from eligible semantic ranking candidates", () => {
+    const undersized = baseCandidate({ sha256: "undersized", dims: { width: 1000, height: 500 } });
+    const eligible = baseCandidate({ sha256: "eligible" });
+
+    const result = matchSlot([undersized, eligible], baseRequest());
+
+    expect(result.ok).toBe(true);
+    expect(result.eligible.map((alternative) => alternative.candidate.sha256)).toEqual([
+      "eligible"
+    ]);
+  });
+
+  it("excludes used candidates from eligible unless reuse is allowed", () => {
+    const reused = baseCandidate({
+      sha256: "reused",
+      used: [{ slot: "home.hero", location: "slider-1" }]
+    });
+    const fresh = baseCandidate({ sha256: "fresh" });
+    const request = baseRequest({ slot: "home.hero", location: "slider-1" });
+
+    const noReuseResult = matchSlot([reused, fresh], request);
+    const allowReuseResult = matchSlot([reused, fresh], { ...request, allowReuse: true });
+
+    expect(noReuseResult.eligible.map((alternative) => alternative.candidate.sha256)).toEqual([
+      "fresh"
+    ]);
+    expect(allowReuseResult.eligible.map((alternative) => alternative.candidate.sha256)).toEqual([
+      "reused",
+      "fresh"
+    ]);
+  });
 });
