@@ -1,9 +1,16 @@
 export type Orientation = "landscape" | "portrait" | "square" | "panorama";
 
-export type SlotCandidate = {
+export type SemanticTextCandidate = {
   sha256: string;
-  canonicalRelPath: string;
   categories: readonly string[];
+  subject?: string;
+  title?: string;
+  description?: string;
+  altText?: string;
+};
+
+export type SlotCandidate = SemanticTextCandidate & {
+  canonicalRelPath: string;
   orientation: Orientation;
   dims: { width: number; height: number };
   used?: readonly { slot: string; location: string }[];
@@ -24,6 +31,36 @@ export type SlotAlternative = {
   candidate: SlotCandidate;
   reasons: string[];
   score: number;
+};
+
+export type SlotMatchOptions = {
+  topK?: number;
+};
+
+/**
+ * `eligible` is the complete, unbounded list of candidates that satisfy every
+ * requested slot constraint, sorted by slot score. It is intentionally NOT
+ * capped by `topK`; `topK` only limits the public `alternatives` near-miss list.
+ */
+type SlotMatchSuccess = {
+  ok: true;
+  candidate: SlotCandidate;
+  alternatives: SlotAlternative[];
+  /** Complete, unbounded constraint-eligible list sorted by slot score; not capped by topK. */
+  eligible: SlotAlternative[];
+};
+
+/**
+ * `eligible` is always present for callers that need to rank constraint-eligible
+ * candidates. On `no_candidate` it is empty because no candidate satisfied every
+ * requested slot constraint.
+ */
+type SlotMatchFailure = {
+  ok: false;
+  reason: "no_candidate";
+  alternatives: SlotAlternative[];
+  /** Empty when no candidate satisfies every requested slot constraint. */
+  eligible: SlotAlternative[];
 };
 
 /**
@@ -66,15 +103,15 @@ const T4_BASE = 4_000_000_000; // category mismatch band starts
 // gap between adjacent band bases, so it can never escape its tier.
 const MAX_DIMENSION_SUBSCORE = 1_000_000_000;
 
-export type SlotMatchResult =
-  | { ok: true; candidate: SlotCandidate; alternatives: SlotAlternative[] }
-  | { ok: false; reason: "no_candidate"; alternatives: SlotAlternative[] };
+export type SlotMatchResult = SlotMatchSuccess | SlotMatchFailure;
 
 export function matchSlot(
   candidates: readonly SlotCandidate[],
-  request: SlotRequest
+  request: SlotRequest,
+  opts: SlotMatchOptions = {}
 ): SlotMatchResult {
   const alternatives = candidates.map((candidate) => explainCandidate(candidate, request));
+  const topK = normalizeTopK(opts.topK);
   const eligible = alternatives
     .filter((alternative) => alternative.reasons.length === 0)
     .sort((a, b) => a.score - b.score);
@@ -83,11 +120,105 @@ export function matchSlot(
     return {
       ok: true,
       candidate: eligible[0].candidate,
-      alternatives: alternativesFor(alternatives)
+      alternatives: alternativesFor(alternatives, topK),
+      eligible
     };
   }
 
-  return { ok: false, reason: "no_candidate", alternatives: alternativesFor(alternatives) };
+  return {
+    ok: false,
+    reason: "no_candidate",
+    alternatives: alternativesFor(alternatives, topK),
+    eligible
+  };
+}
+
+const STOPWORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "by",
+  "for",
+  "from",
+  "in",
+  "into",
+  "is",
+  "it",
+  "of",
+  "on",
+  "or",
+  "the",
+  "to",
+  "with"
+]);
+
+export function semanticTextTokens(text: string): string[] {
+  return [
+    ...new Set(
+      text
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .match(/[\p{L}\p{N}]+/gu)
+        ?.filter((token) => token.length > 1 && !STOPWORDS.has(token)) ?? []
+    )
+  ];
+}
+
+export function localTextScore(candidate: SemanticTextCandidate, query: string): number {
+  return localTextScoreForTokens(candidate, semanticTextTokens(query));
+}
+
+/**
+ * Scores a candidate against pre-tokenized query tokens. Callers should pass
+ * tokens produced by `semanticTextTokens(...)`; use `localTextScore(...)` when
+ * the input is still a raw query string.
+ */
+export function localTextScoreForTokens(
+  candidate: SemanticTextCandidate,
+  queryTokens: readonly string[]
+): number {
+  if (queryTokens.length === 0) {
+    return 0;
+  }
+
+  return (
+    weightedOverlap(queryTokens, candidate.subject ?? "", 3) +
+    weightedOverlap(queryTokens, candidate.title ?? "", 2) +
+    weightedOverlap(queryTokens, candidate.categories.join(" "), 2) +
+    weightedOverlap(queryTokens, candidate.altText ?? "", 1) +
+    weightedOverlap(queryTokens, candidate.description ?? "", 1)
+  );
+}
+
+export function localTextMatchedTokens(candidate: SemanticTextCandidate, query: string): string[] {
+  return localTextMatchedTokensForTokens(candidate, semanticTextTokens(query));
+}
+
+/**
+ * Returns query tokens that actually appear in candidate metadata, preserving
+ * query token order for stable human-readable ranking reasons.
+ */
+export function localTextMatchedTokensForTokens(
+  candidate: SemanticTextCandidate,
+  queryTokens: readonly string[]
+): string[] {
+  if (queryTokens.length === 0) {
+    return [];
+  }
+
+  const metadataTokens = new Set([
+    ...semanticTextTokens(candidate.subject ?? ""),
+    ...semanticTextTokens(candidate.title ?? ""),
+    ...semanticTextTokens(candidate.categories.join(" ")),
+    ...semanticTextTokens(candidate.altText ?? ""),
+    ...semanticTextTokens(candidate.description ?? "")
+  ]);
+
+  return [...new Set(queryTokens)].filter((token) => metadataTokens.has(token));
 }
 
 export function explainCandidate(candidate: SlotCandidate, request: SlotRequest): SlotAlternative {
@@ -188,6 +319,26 @@ function scoreCandidate(
   return tierBase + cappedSubScore;
 }
 
-function alternativesFor(alternatives: readonly SlotAlternative[]): SlotAlternative[] {
-  return [...alternatives].sort((a, b) => a.score - b.score).slice(0, 3);
+function weightedOverlap(tokens: readonly string[], text: string, weight: number): number {
+  const fieldTokens = new Set(semanticTextTokens(text));
+  return tokens.reduce((score, token) => score + (fieldTokens.has(token) ? weight : 0), 0);
+}
+
+function alternativesFor(
+  alternatives: readonly SlotAlternative[],
+  topK: number
+): SlotAlternative[] {
+  return [...alternatives].sort((a, b) => a.score - b.score).slice(0, topK);
+}
+
+function normalizeTopK(topK: number | undefined): number {
+  if (topK === undefined) {
+    return 3;
+  }
+
+  if (!Number.isInteger(topK) || topK < 1) {
+    throw new RangeError("SlotMatchOptions.topK must be a positive integer");
+  }
+
+  return topK;
 }

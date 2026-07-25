@@ -11,6 +11,26 @@ export interface VisionProvider {
   analyze(input: VisionInput): Promise<ImageAnalysis>;
 }
 
+export type RankingCandidateMeta = {
+  sha256: string;
+  subject: string;
+  title: string;
+  description: string;
+  altText: string;
+  categories: readonly string[];
+};
+
+export type RankingEntry = {
+  sha256: string;
+  score: number;
+  reason: string;
+};
+
+export interface TextRankerProvider {
+  readonly id: string;
+  rank(query: string, candidates: readonly RankingCandidateMeta[]): Promise<RankingEntry[]>;
+}
+
 export type VisionErrorKind = "RateLimit" | "Timeout" | "Refusal" | "MalformedOutput";
 
 export class VisionProviderError extends Error {
