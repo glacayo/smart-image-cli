@@ -126,3 +126,66 @@ Mode: Standard. Scope remained PR2 / work unit 2 only: AI metadata-only text ran
 
 - PR2 is ready for re-review, but the repository audit gate remains blocked by the known dev-dependency advisory chain unrelated to semantic ranking.
 - The text ranker intentionally rejects project-config endpoint overrides until a future trusted-project-endpoint model exists; users must place custom provider endpoints in user config so endpoint and API key share the same trust boundary.
+
+## PR3 / Work Unit 3: Pick Service / CLI Wiring
+
+Mode: Standard (OpenSpec `strict_tdd: false`; project test runner discovered via `package.json`)
+
+### Completed Tasks
+
+- [x] 3.1 Extended `src/app/pick-service.ts` options/deps with `query`, `semantic`, `topK`, and `textRanker`; mapped indexed metadata into slot candidates; ranked only `matchSlot(...).eligible` candidates when a query exists; emitted success and no-candidate `ranking` blocks.
+- [x] 3.2 Mapped AI ranking/provider failures to structured `ai_ranking_failed` exit `4`, preserved no-local-fallback behavior for AI mode, skipped ranker calls when there are no eligible candidates, and kept usage recording limited to the final successful pick.
+- [x] 3.3 Added `img pick` flags `--query <text>`, `--semantic local|ai`, and `--top-k <n>`; validated semantic/top-k input as `invalid_input` exit `3`; emitted the default-local stderr note when `--query` omits `--semantic`; wired local ranker by default and AI ranker through `buildTextRankerProvider(root)`.
+- [x] 3.4 Added focused PR3 tests in `test/app/pick-semantic-service.test.ts` and `test/commands/pick-semantic-options.test.ts` for local defaulting, explicit AI metadata-only ranking, AI failure mapping, no-query behavior, no-eligible no-spend behavior, ranking output shape, and invalid option validation.
+
+### PR Boundary
+
+PR3 contains pick-service semantic orchestration, CLI option parsing/wiring, manifest ranking output, and focused app/command tests. It intentionally does not add PR4 e2e expansion, docs/doctor polish, archive work, or dependency-audit fixes.
+
+### Verification
+
+- `npm test -- test/app/pick-semantic-service.test.ts test/commands/pick-semantic-options.test.ts test/adapters/local-text-ranker.test.ts test/adapters/text-ranker-openai-compat.test.ts test/app/runtime-text-ranker-provider.test.ts` — passed (5 files, 29 tests).
+- `npm run typecheck` — passed.
+- `npm run lint` — passed.
+- `npm run format` — passed after formatting source/test files, then passed as check.
+- `npm test` — passed (25 files, 273 tests).
+- `npm run build` — passed.
+- `npm audit` — failed with the known 5 high-severity dev-dependency advisory chain through `eslint` / `@eslint/config-array` / `@eslint/eslintrc` / `minimatch` / `brace-expansion`; `npm audit fix --force` would install `eslint@10.8.0` as a breaking change, so no dependency changes were made in this PR3 scope.
+
+### Remaining Risk
+
+- PR3 is ready for review, but the repository audit gate remains blocked by the known dev-dependency advisory chain unrelated to semantic pick query wiring.
+- Broad e2e CLI flow coverage, docs/doctor polish, final spec/archive verification, and no-migration/no-reanalysis final confirmation remain in PR4.
+
+## PR3 Review Fix Batch
+
+Mode: Standard. Scope remained PR3 / work unit 3 only: pick-service semantic output/failure semantics, CLI command wiring validation, focused service/command tests, and the redaction helper regression test. No PR4 e2e/docs/archive work, commits, pushes, or PR creation were performed.
+
+### Review Findings Addressed
+
+- [x] `ranking.query` is now redacted and bounded before structured output is returned; tests cover a secret-like long query and assert the raw value is not echoed.
+- [x] Pick-service AI failure details are redacted again at the service boundary with `defaultSecretRedactor.maskValue(...)`, even for future/injected providers that throw `VisionProviderError` with unredacted `redactedDetails`.
+- [x] AI-mode rankings that return an empty array or only non-eligible sha values for non-empty eligible input now fail loudly as `ai_ranking_failed` / exit `4`; local mode still keeps the deterministic no-ranked-candidate behavior.
+- [x] Ranking blocks now include `status: "ranked" | "no_candidate"`; no-candidate ranking blocks no longer expose a misleading `topK`, while success ranking keeps the existing `topK` shape.
+- [x] The CLI default-local stderr note now checks the parsed/validated semantic state (`parsed.semantic === undefined`) instead of raw commander option bags.
+- [x] Registered-command tests now cover invalid `--semantic` and invalid `--top-k` as structured `invalid_input` / exit `3`, with no service or provider construction call.
+- [x] Registered-command tests now cover explicit `--semantic ai` provider setup failure as structured `ai_ranking_failed` / exit `4`, with no service call when dependencies cannot be built.
+- [x] AI success service coverage now proves ranking writes no extra usage/audit row; only the final successful `pick` usage event is present.
+- [x] URL query-parameter redaction now preserves the parameter name while masking the value, preventing malformed `?=$3[REDACTED]` redaction output.
+
+### Verification
+
+- `npm test -- test/app/pick-semantic-service.test.ts test/commands/pick-semantic-options.test.ts test/adapters/secret-redactor.test.ts test/adapters/local-text-ranker.test.ts test/adapters/text-ranker-openai-compat.test.ts test/app/runtime-text-ranker-provider.test.ts` — passed (6 files, 54 tests).
+- `npm run typecheck` — passed.
+- `npm run lint` — passed.
+- `npm run format` — initially reported formatting drift in `src/adapters/secret-redactor.ts`, `src/app/pick-service.ts`, and `src/commands/pick.ts`; after Prettier write, `npm run format` passed.
+- First `npm test` full run — one known/flaky 5s timeout in `test/integration/optimization-flow.test.ts` (`strips GPS and descriptive metadata by default`).
+- `npm test -- test/integration/optimization-flow.test.ts` — passed on focused rerun (6 tests).
+- Second `npm test` full run — passed (25 files, 280 tests).
+- `npm run build` — passed.
+- `npm audit` — failed with the known 5 high-severity dev-dependency advisory chain through `eslint` / `@eslint/config-array` / `@eslint/eslintrc` / `minimatch` / `brace-expansion`; `npm audit fix --force` would install `eslint@10.8.0` as a breaking change, so no dependency changes were made in this PR3 review-fix scope.
+
+### Remaining Risk
+
+- PR3 is ready for re-review after the review-fix batch, but the repository audit gate remains blocked by the known dev-dependency advisory chain unrelated to semantic pick query wiring.
+- PR4 still owns broad e2e CLI flow coverage, docs/doctor polish, final spec/archive verification, and no-migration/no-reanalysis final confirmation.

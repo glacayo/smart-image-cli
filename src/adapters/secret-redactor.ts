@@ -18,7 +18,7 @@ const SECRET_URL_PARAM_NAMES =
   "(?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|" +
   "client[_-]?secret|private[_-]?key|auth[_-]?token|bearer[_-]?token|" +
   "token|secret|password|passwd|pwd|credential|key)";
-const URL_QUERY_TOKEN = new RegExp(`([?#&])${SECRET_URL_PARAM_NAMES}(=)[^\\s&#]+`, "gi");
+const URL_QUERY_TOKEN = new RegExp(`([?#&])(${SECRET_URL_PARAM_NAMES})(=)[^\\s&#]+`, "gi");
 // Percent-encoded query/fragment params whose decoded name is a known secret
 // name. Matches `?name=...`, `&name=...`, `#name=...` for any param name and
 // then checks the decoded name against SECRET_URL_PARAM_NAMES (case-insensitive).
