@@ -94,7 +94,7 @@ function hasEncodedSecretUrlParam(value: string): boolean {
     const rawName = match[1];
     if (rawName === undefined) continue;
     if (SECRET_URL_PARAM_NAME_RE.test(rawName)) return true;
-    let decoded = rawName;
+    let decoded: string;
     try {
       decoded = decodeURIComponent(rawName);
     } catch {

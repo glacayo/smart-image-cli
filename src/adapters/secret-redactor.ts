@@ -105,12 +105,11 @@ const ENCODED_SECRET_PARAM_NAME = new RegExp(`^${SECRET_URL_PARAM_NAMES}$`, "i")
  */
 function isEncodedSecretParamName(rawName: string): boolean {
   if (ENCODED_SECRET_PARAM_NAME.test(rawName)) return true;
-  let decoded = rawName;
+  let decoded: string;
   try {
     decoded = decodeURIComponent(rawName);
   } catch {
     return false;
   }
-  if (decoded === rawName) return false;
-  return ENCODED_SECRET_PARAM_NAME.test(decoded);
+  return decoded !== rawName && ENCODED_SECRET_PARAM_NAME.test(decoded);
 }

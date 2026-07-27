@@ -10,12 +10,13 @@ Smart Image CLI is designed for developers and AI coding agents that need to wor
 
 | Area | Status |
 | --- | --- |
-| SDD artifacts | Ready |
-| Phase 1 foundation | Implemented |
-| CLI shell | Implemented |
-| Domain policies | Implemented |
-| Storage/adapters | Pending |
-| App services | Pending |
+| SDD artifacts | Ready for archive after final verification |
+| Foundation and domain policies | Implemented |
+| CLI shell and commands | Implemented |
+| Storage/adapters | Implemented: SQLite index, JSON sidecars, guarded storage root, ExifTool metadata, Sharp processing |
+| Application services | Implemented: analyze, config, doctor, library, optimize, pick, and runtime provider wiring |
+| AI/provider adapters | Implemented: OpenAI-compatible image analysis plus local and AI text ranking providers |
+| Semantic pick query | Implemented and verified for local default ranking, explicit metadata-only AI ranking, bounded `topK`, structured ranking output, and loud AI failure handling |
 
 ## What it will do
 
@@ -64,6 +65,8 @@ npm run lint
 npm test
 npm run build
 ```
+
+OpenSpec archive validation is run manually with `npm run openspec:validate -- <change>`; it is a standalone SDD/archive gate, not part of the default build/test commands. The project wrapper disables OpenSpec telemetry for validation (`OPENSPEC_TELEMETRY=0`, `DO_NOT_TRACK=1`). `openspec list` may still report legacy `openspec/config.yaml` rules-format warnings for `apply`/`verify`; those warnings pre-date the semantic pick query change and are out of scope for this warning-cleanup chore.
 
 ## Roadmap
 

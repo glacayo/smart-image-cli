@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { exiftool } from "exiftool-vendored";
 import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../../src/cli/program.js";
@@ -12,6 +13,7 @@ import { rmWithRetry } from "../support/cleanup.js";
 const roots: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   await Promise.all(roots.map((root) => rmWithRetry(root)));
   roots.length = 0;
@@ -432,6 +434,9 @@ describe("Phase 4 CLI e2e flow", () => {
       }
     });
     const userConfigEnv = { APPDATA: appData, XDG_CONFIG_HOME: appData };
+    // This e2e asserts config redaction, not native ExifTool readiness; stub the
+    // probe so full-suite contention cannot make this redaction test time out.
+    vi.spyOn(exiftool, "version").mockResolvedValue("12.00");
 
     const rejected = await runImg(
       [
