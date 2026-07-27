@@ -189,3 +189,63 @@ Mode: Standard. Scope remained PR3 / work unit 3 only: pick-service semantic out
 
 - PR3 is ready for re-review after the review-fix batch, but the repository audit gate remains blocked by the known dev-dependency advisory chain unrelated to semantic pick query wiring.
 - PR4 still owns broad e2e CLI flow coverage, docs/doctor polish, final spec/archive verification, and no-migration/no-reanalysis final confirmation.
+
+## PR4 / Work Unit 4: E2E / Verification / Docs Polish
+
+Mode: Standard (OpenSpec `strict_tdd: false`; project test runner discovered via `package.json`)
+
+### Completed Tasks
+
+- [x] 4.1 Extended `test/e2e/cli-flow.test.ts` with semantic local CLI coverage for `--query`, default-local stderr note, `--top-k`, success manifest `ranking`, and no-query constraint-path output without `ranking`; added semantic AI e2e coverage with a stubbed provider payload and AI failure coverage proving `ai_ranking_failed` without local fallback.
+- [x] 4.2 Ran focused PR4 e2e tests plus full gates: `npm run typecheck`, `npm run lint`, `npm run format`, `npm test`, `npm run build`, and `npm audit`.
+- [x] 4.3 Confirmed this PR4 batch added no DB/schema migration, no new runtime dependency, and no source-image re-read/re-analysis path for semantic ranking; AI e2e asserts provider payloads contain metadata only and no `image_url`, `data:image`, `imageBytes`, or source image paths.
+
+### Docs Polish
+
+- Added README usage docs for `img pick --query`, `--semantic local|ai`, `--top-k`, local default behavior, explicit metadata-only AI mode, no image re-read/re-analysis, and loud `ai_ranking_failed` behavior.
+
+### PR Boundary
+
+PR4 contains final semantic pick e2e coverage, README usage polish, OpenSpec task/progress updates, and verification evidence. It does not archive the OpenSpec change, create commits/PRs, add dependencies, change database schema, or modify runtime semantic ranking logic.
+
+### Verification
+
+- `npm test -- test/e2e/cli-flow.test.ts` — passed (1 file, 10 tests).
+- `npm run typecheck` — passed.
+- `npm run lint` — passed.
+- `npm run format` — passed.
+- `npm test` — passed (25 files, 283 tests).
+- `npm run build` — passed.
+- `npm audit` — failed with the known 5 high-severity dev-dependency advisory chain through `brace-expansion` / `minimatch` / `@eslint/config-array` / `@eslint/eslintrc` / `eslint`; `npm audit fix --force` would install `eslint@10.8.0` as a breaking change, so no dependency changes were made in this PR4 scope.
+
+### Remaining Risk
+
+- The implementation and final e2e/doc polish are complete, but the repository audit gate remains blocked by the known dev-dependency advisory chain unrelated to semantic pick query runtime behavior.
+- Archive remains intentionally deferred until after final merge/verify.
+
+## PR4 Review Fix Batch
+
+Mode: Standard. Scope remained PR4 / work unit 4 only: e2e assertion hardening and OpenSpec progress documentation. No archive, commits, pushes, PR creation, dependency fixes, runtime code changes, or doctor diagnostic implementation were performed.
+
+### Review Finding Addressed
+
+- [x] Replaced the vacuous no-fallback assertion against the phantom substring `matches query tokens` with structural failure assertions: provider-error exit `4`, structured `{ ok: false, status: "failed", command: "pick", reason: "ai_ranking_failed" }`, provider failure kind `RateLimit`, no success `manifest`/`ranking` payload, no local-mode ranking marker, no local-ranker sentinel reason `matched local metadata tokens`, and redacted provider failure output.
+
+### Deferred Work
+
+- Doctor diagnostics for semantic AI ranking remain deferred/out of scope for PR4 review-fix scope. This batch intentionally documents the deferral but does not implement new `doctor` checks.
+
+### Verification
+
+- `npm test -- test/e2e/cli-flow.test.ts` — passed (1 file, 10 tests).
+- `npm run typecheck` — passed.
+- `npm run lint` — passed.
+- `npm run format` — passed.
+- `npm test` — passed (25 files, 283 tests).
+- `npm run build` — passed.
+- `npm audit` — failed with the known 5 high-severity dev-dependency advisory chain through `brace-expansion` / `minimatch` / `@eslint/config-array` / `@eslint/eslintrc` / `eslint`; `npm audit fix --force` would install `eslint@10.8.0` as a breaking change, so no dependency changes were made in this PR4 review-fix scope.
+
+### Remaining Risk
+
+- PR4 is ready for re-review after the assertion hardening batch, but the repository audit gate remains blocked by the known dev-dependency advisory chain unrelated to semantic pick query runtime behavior.
+- Archive remains intentionally deferred until after final merge/verify.
