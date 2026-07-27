@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { exiftool } from "exiftool-vendored";
 import sharp from "sharp";
 import { optimizeService } from "../../src/app/optimize-service.js";
@@ -58,16 +58,48 @@ describe("Phase 4 optimization integration", () => {
   it("preserves writable metadata only when keep-metadata is explicit", async () => {
     const root = await tempRoot();
     await writeJpegWithCaptionExif(root, "captioned.jpg", 400, 200);
+    // Keep this service-level regression deterministic: the ExifTool-backed
+    // adapter has dedicated coverage, while this test only needs to prove that
+    // `optimizeService` reads/reapplies metadata on explicit opt-in and keeps
+    // the default path stripped.
+    const metadata = {
+      read: vi.fn(async () => ({ ImageDescription: "public caption" })),
+      reapplyTags: vi.fn(async (filePath: string, tags: Record<string, unknown>) => {
+        const caption = tags.ImageDescription;
+        if (typeof caption === "string") {
+          await writeCaptionExif(filePath, caption);
+        }
+      })
+    };
 
-    const stripped = await optimizeService(root, "captioned.jpg", { format: "jpg", maxWidth: 200 });
-    const kept = await optimizeService(root, "captioned.jpg", {
-      format: "jpg",
-      maxWidth: 200,
-      keepMetadata: true
-    });
+    const stripped = await optimizeService(
+      root,
+      "captioned.jpg",
+      { format: "jpg", maxWidth: 200 },
+      { metadata }
+    );
+    const kept = await optimizeService(
+      root,
+      "captioned.jpg",
+      {
+        format: "jpg",
+        maxWidth: 200,
+        keepMetadata: true
+      },
+      { metadata }
+    );
 
     expect(stripped.exitCode).toBe(0);
     expect(kept.exitCode).toBe(0);
+    expect(metadata.read).toHaveBeenCalledTimes(1);
+    expect(metadata.read).toHaveBeenCalledWith(path.join(root, "captioned.jpg"));
+    expect(metadata.reapplyTags).toHaveBeenCalledTimes(1);
+    expect(metadata.reapplyTags).toHaveBeenCalledWith(
+      path.join(root, "_out", "captioned-002.jpg"),
+      {
+        ImageDescription: "public caption"
+      }
+    );
     const strippedMetadata = await sharp(path.join(root, "_out", "captioned.jpg")).metadata();
     const keptMetadata = await sharp(path.join(root, "_out", "captioned-002.jpg")).metadata();
     expect(strippedMetadata.exif).toBeUndefined();
@@ -139,10 +171,17 @@ describe("Phase 4 optimization integration", () => {
   });
 });
 
-async function writeJpeg(root: string, rel: string, width: number, height: number): Promise<string> {
+async function writeJpeg(
+  root: string,
+  rel: string,
+  width: number,
+  height: number
+): Promise<string> {
   const file = path.join(root, rel);
   await fs.mkdir(path.dirname(file), { recursive: true });
-  await sharp({ create: { width, height, channels: 3, background: "white" } }).jpeg().toFile(file);
+  await sharp({ create: { width, height, channels: 3, background: "white" } })
+    .jpeg()
+    .toFile(file);
   return file;
 }
 
@@ -188,6 +227,19 @@ async function writeJpegWithCaptionExif(
     })
     .toFile(file);
   return file;
+}
+
+async function writeCaptionExif(filePath: string, caption: string): Promise<void> {
+  const input = await fs.readFile(filePath);
+  const withCaption = await sharp(input)
+    .jpeg()
+    .withExif({
+      IFD0: {
+        ImageDescription: caption
+      }
+    })
+    .toBuffer();
+  await fs.writeFile(filePath, withCaption);
 }
 
 async function writeTags(filePath: string, tags: Record<string, unknown>): Promise<void> {

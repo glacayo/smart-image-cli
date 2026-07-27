@@ -11,16 +11,28 @@ import { extensionWithoutDot, validateExistingInput, type ServiceOutcome } from 
 
 export type OptimizeOptions = Omit<ResizeTarget, "format"> & { format?: ImageFormat };
 
+type OptimizeMetadata = Pick<ExiftoolMetadata, "read" | "reapplyTags">;
+
+export type OptimizeDeps = {
+  /**
+   * Optional metadata adapter seam. Production omits it (uses the real
+   * ExifTool-backed adapter); tests inject a deterministic adapter so service
+   * orchestration can be verified without spawning native ExifTool work.
+   */
+  metadata?: OptimizeMetadata;
+};
+
 export async function optimizeService(
   rootInput: string,
   source: string,
-  options: OptimizeOptions
+  options: OptimizeOptions,
+  deps: OptimizeDeps = {}
 ): Promise<ServiceOutcome> {
   const root = path.resolve(rootInput);
   const input = await validateExistingInput(root, source);
   const guard = new StorageRootGuard(root);
   const processor = new SharpProcessor(guard);
-  const metadata = new ExiftoolMetadata();
+  const metadata = deps.metadata ?? new ExiftoolMetadata();
   const info = await processor.probe(input);
   const format = options.format ?? info.format ?? (extensionWithoutDot(source) as ImageFormat);
   const target: ResizeTarget = { ...options, format };

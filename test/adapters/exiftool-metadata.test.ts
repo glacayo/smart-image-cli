@@ -1,18 +1,29 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { exiftool } from "exiftool-vendored";
+import sharp from "sharp";
 import {
   ExiftoolMetadata,
   MetadataError,
   type ExiftoolSeam
 } from "../../src/adapters/exiftool-metadata.js";
+import { rmWithRetry } from "../support/cleanup.js";
 
 const roots: string[] = [];
 
+// Native ExifTool startup plus JPEG read/write I/O can exceed Vitest's default
+// timeout on Windows; keep the longer deadline scoped to native adapter seams.
+const NATIVE_EXIFTOOL_TEST_TIMEOUT_MS = 40_000;
+
 afterEach(async () => {
-  await Promise.all(roots.map((root) => fs.rm(root, { recursive: true, force: true })));
+  await Promise.all(roots.map((root) => rmWithRetry(root)));
   roots.length = 0;
+});
+
+afterAll(async () => {
+  await exiftool.end();
 });
 
 describe("ExiftoolMetadata", () => {
@@ -144,6 +155,24 @@ describe("ExiftoolMetadata", () => {
     }
   });
 
+  it(
+    "reads and reapplies writable metadata with the native ExifTool adapter",
+    async () => {
+      const root = await tempRoot();
+      const source = await writeJpegWithCaption(root, "source.jpg", "native public caption");
+      const target = await writeJpeg(root, "target.jpg");
+      const metadata = new ExiftoolMetadata();
+
+      const sourceTags = await metadata.read(source);
+      await metadata.reapplyTags(target, sourceTags);
+      const targetTags = await metadata.read(target);
+
+      expect(sourceTags).toHaveProperty("ImageDescription", "native public caption");
+      expect(targetTags).toHaveProperty("ImageDescription", "native public caption");
+    },
+    NATIVE_EXIFTOOL_TEST_TIMEOUT_MS
+  );
+
   it("read wraps exiftool errors as MetadataError", async () => {
     const root = await tempRoot();
     const input = path.join(root, "photo.jpg");
@@ -208,9 +237,9 @@ describe("ExiftoolMetadata", () => {
     const metadata = new ExiftoolMetadata(undefined, neverResolvingSeam, {
       timeoutMs: 50
     });
-    await expect(
-      metadata.reapplyTags(input, { Make: "TestCam" })
-    ).rejects.toBeInstanceOf(MetadataError);
+    await expect(metadata.reapplyTags(input, { Make: "TestCam" })).rejects.toBeInstanceOf(
+      MetadataError
+    );
   });
 });
 
@@ -218,4 +247,27 @@ async function tempRoot(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "smart-image-exif-"));
   roots.push(root);
   return root;
+}
+
+async function writeJpeg(root: string, rel: string): Promise<string> {
+  const file = path.join(root, rel);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await sharp({ create: { width: 12, height: 8, channels: 3, background: "white" } })
+    .jpeg()
+    .toFile(file);
+  return file;
+}
+
+async function writeJpegWithCaption(root: string, rel: string, caption: string): Promise<string> {
+  const file = path.join(root, rel);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await sharp({ create: { width: 12, height: 8, channels: 3, background: "white" } })
+    .jpeg()
+    .withExif({
+      IFD0: {
+        ImageDescription: caption
+      }
+    })
+    .toFile(file);
+  return file;
 }
