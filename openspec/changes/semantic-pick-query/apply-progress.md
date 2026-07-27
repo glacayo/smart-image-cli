@@ -303,3 +303,27 @@ Mode: Standard. Scope remained warning-cleanup only. No archive, commit, push, P
 ### Remaining Risk
 
 - None from the review findings. The semantic-pick-query change remains ready for final review; archive is still intentionally not performed in this batch.
+
+## Pre-Archive Flaky Test Fix Batch
+
+Mode: Standard. Scope was limited to stabilizing the final verification timeout in `test/integration/optimization-flow.test.ts`. No archive, commit, push, PR creation, dependency change, runtime semantic ranking behavior change, or production code change was performed.
+
+### Flake Addressed
+
+- [x] Stabilized `strips GPS and descriptive metadata by default` by replacing the test's unnecessary real `exiftool-vendored` write/read path with a deterministic Sharp EXIF fixture and Sharp metadata assertion. The source fixture still contains EXIF with GPS and `ImageDescription`, and the optimized output is asserted to have no EXIF segment, preserving the privacy-stripping intent without paying native ExifTool startup inside this default-strip test.
+
+### Verification
+
+- `npm test -- test/integration/optimization-flow.test.ts -t "strips GPS and descriptive metadata by default"` — passed after the fix; focused test runtime dropped from ~949ms before the change to ~89ms after the change on this machine.
+- `npm test -- test/integration/optimization-flow.test.ts` — passed 3 consecutive focused file runs (6 tests each; durations 2.78s, 2.84s, 2.80s).
+- `npm test && npm test` — passed two consecutive full-suite runs (25 files, 283 tests each; durations 8.98s and 10.87s).
+- `npm run typecheck` — passed.
+- `npm run lint` — passed.
+- `npm run format` — passed.
+- `npm run build` — passed.
+- `npm audit` — passed, 0 vulnerabilities.
+- `npm run openspec:validate -- semantic-pick-query` — passed: `Change 'semantic-pick-query' is valid`.
+
+### Remaining Risk
+
+- None from the flaky timeout fix. Final archive verification can proceed cleanly; archive was intentionally not performed in this batch.

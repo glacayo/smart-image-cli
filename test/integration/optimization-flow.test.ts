@@ -42,21 +42,17 @@ describe("Phase 4 optimization integration", () => {
 
   it("strips GPS and descriptive metadata by default", async () => {
     const root = await tempRoot();
-    await writeJpeg(root, "gps.jpg", 400, 200);
-    await writeTags(path.join(root, "gps.jpg"), {
-      GPSLatitude: 12.34,
-      GPSLongitude: 56.78,
-      ImageDescription: "private location"
+    const source = await writeJpegWithPrivateExif(root, "gps.jpg", 400, 200);
+    await expect(sharp(source).metadata()).resolves.toMatchObject({
+      exif: expect.any(Buffer)
     });
 
     const outcome = await optimizeService(root, "gps.jpg", { format: "jpg", maxWidth: 200 });
 
     expect(outcome.exitCode).toBe(0);
     const output = path.join(root, "_out", "gps.jpg");
-    const tags = await exiftool.read(output);
-    expect(tags.GPSLatitude).toBeUndefined();
-    expect(tags.GPSLongitude).toBeUndefined();
-    expect(tags.ImageDescription).toBeUndefined();
+    const metadata = await sharp(output).metadata();
+    expect(metadata.exif).toBeUndefined();
   });
 
   it("preserves writable metadata only when keep-metadata is explicit", async () => {
@@ -150,6 +146,31 @@ async function writeJpeg(root: string, rel: string, width: number, height: numbe
   const file = path.join(root, rel);
   await fs.mkdir(path.dirname(file), { recursive: true });
   await sharp({ create: { width, height, channels: 3, background: "white" } }).jpeg().toFile(file);
+  return file;
+}
+
+async function writeJpegWithPrivateExif(
+  root: string,
+  rel: string,
+  width: number,
+  height: number
+): Promise<string> {
+  const file = path.join(root, rel);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await sharp({ create: { width, height, channels: 3, background: "white" } })
+    .jpeg()
+    .withExif({
+      IFD0: {
+        ImageDescription: "private location"
+      },
+      IFD3: {
+        GPSLatitudeRef: "N",
+        GPSLatitude: "12/1 20/1 2400/100",
+        GPSLongitudeRef: "E",
+        GPSLongitude: "56/1 46/1 4800/100"
+      }
+    })
+    .toFile(file);
   return file;
 }
 
