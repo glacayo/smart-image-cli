@@ -57,8 +57,7 @@ describe("Phase 4 optimization integration", () => {
 
   it("preserves writable metadata only when keep-metadata is explicit", async () => {
     const root = await tempRoot();
-    await writeJpeg(root, "captioned.jpg", 400, 200);
-    await writeTags(path.join(root, "captioned.jpg"), { ImageDescription: "public caption" });
+    await writeJpegWithCaptionExif(root, "captioned.jpg", 400, 200);
 
     const stripped = await optimizeService(root, "captioned.jpg", { format: "jpg", maxWidth: 200 });
     const kept = await optimizeService(root, "captioned.jpg", {
@@ -69,13 +68,11 @@ describe("Phase 4 optimization integration", () => {
 
     expect(stripped.exitCode).toBe(0);
     expect(kept.exitCode).toBe(0);
-    await expect(exiftool.read(path.join(root, "_out", "captioned.jpg"))).resolves.not.toHaveProperty(
-      "ImageDescription"
-    );
-    await expect(exiftool.read(path.join(root, "_out", "captioned-002.jpg"))).resolves.toHaveProperty(
-      "ImageDescription",
-      "public caption"
-    );
+    const strippedMetadata = await sharp(path.join(root, "_out", "captioned.jpg")).metadata();
+    const keptMetadata = await sharp(path.join(root, "_out", "captioned-002.jpg")).metadata();
+    expect(strippedMetadata.exif).toBeUndefined();
+    expect(keptMetadata.exif).toEqual(expect.any(Buffer));
+    expect(keptMetadata.exif?.includes(Buffer.from("public caption"))).toBe(true);
   });
 
   it("normalizes EXIF orientation so the optimized output has normalized dimensions and no orientation tag", async () => {
@@ -168,6 +165,25 @@ async function writeJpegWithPrivateExif(
         GPSLatitude: "12/1 20/1 2400/100",
         GPSLongitudeRef: "E",
         GPSLongitude: "56/1 46/1 4800/100"
+      }
+    })
+    .toFile(file);
+  return file;
+}
+
+async function writeJpegWithCaptionExif(
+  root: string,
+  rel: string,
+  width: number,
+  height: number
+): Promise<string> {
+  const file = path.join(root, rel);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await sharp({ create: { width, height, channels: 3, background: "white" } })
+    .jpeg()
+    .withExif({
+      IFD0: {
+        ImageDescription: "public caption"
       }
     })
     .toFile(file);
