@@ -249,3 +249,57 @@ Mode: Standard. Scope remained PR4 / work unit 4 only: e2e assertion hardening a
 
 - PR4 is ready for re-review after the assertion hardening batch, but the repository audit gate remains blocked by the known dev-dependency advisory chain unrelated to semantic pick query runtime behavior.
 - Archive remains intentionally deferred until after final merge/verify.
+
+## Pre-Archive Warning Fix Batch
+
+Mode: Standard. Scope was limited to final verification warning cleanup before archive. No OpenSpec archive, commit, push, PR creation, runtime dependency change, or semantic ranking behavior change was performed.
+
+### Warnings Addressed
+
+- [x] Resolved the `npm audit` high-severity dev-dependency advisory chain by upgrading dev-only lint tooling to `eslint@^10.8.0`, `@eslint/js@^10.0.1`, and `typescript-eslint@^8.65.0`; lockfile was updated and runtime dependencies were left unchanged.
+- [x] Added `@fission-ai/openspec@^1.6.0` as a devDependency and `npm run openspec:validate -- <change>` as the project-local strict OpenSpec validation command.
+- [x] Wrapped OpenSpec validation through `scripts/openspec-validate.mjs` so validation runs with telemetry disabled (`OPENSPEC_TELEMETRY=0`, `DO_NOT_TRACK=1`) instead of allowing default analytics egress from developer machines.
+- [x] Updated the README status table so storage/adapters, application services, provider adapters, and semantic pick query support are no longer shown as pending/stale.
+- [x] Fixed three ESLint 10 `no-useless-assignment` findings without changing behavior: URL secret-param decoding now uses definite assignment, and SQLite rebuild returns `atomic: true` after a successful transaction.
+
+### Verification
+
+- `npm run typecheck` — passed.
+- `npm run lint` — passed after fixing ESLint 10 `no-useless-assignment` findings.
+- `npm run format` — initially reported formatting drift after dependency/script/source edits; passed after Prettier write.
+- `npm test` — passed (25 files, 283 tests).
+- `npm run build` — passed.
+- `npm audit` — passed, 0 vulnerabilities.
+- `npm run openspec:validate -- semantic-pick-query` — passed: `Change 'semantic-pick-query' is valid`.
+
+### Remaining Risk
+
+- None from the final verification warnings. Archive can proceed without the previous `npm audit`, OpenSpec strict validation, or stale README warnings.
+
+## Pre-Archive Warning Review Fix Batch
+
+Mode: Standard. Scope remained warning-cleanup only. No archive, commit, push, PR creation, runtime dependency change, semantic ranking behavior change, or unrelated OpenSpec config migration was performed.
+
+### Review Findings Addressed
+
+- [x] Stabilized the e2e redaction test by isolating it from the real native ExifTool readiness probe; the test now stubs `exiftool.version()` because its assertions cover project-config rejection and doctor redaction, while ExifTool readiness has separate service-level coverage.
+- [x] Added the requested SQLite rebuild readability comment: reaching the returned `atomic: true` means `tx()` committed because rollback paths throw before the return.
+- [x] Documented that adding `@fission-ai/openspec` intentionally brings a dev-only transitive CLI footprint in `package-lock.json` (`@inquirer/*`, nested `zod`, and related CLI packages), so lockfile churn is expected and remains outside runtime dependencies.
+- [x] Documented `npm run openspec:validate -- <change>` as a standalone/manual OpenSpec archive gate rather than a default build/test command.
+- [x] Documented that `openspec list` still emits pre-existing legacy `openspec/config.yaml` rules-format warnings for `apply`/`verify`; those warnings are out of scope for this semantic-pick-query warning-cleanup chore.
+
+### Verification
+
+- `npm test -- test/e2e/cli-flow.test.ts` — passed 3 consecutive focused runs (10 tests each; durations 2.00s, 2.18s, 1.85s), proving the redaction e2e no longer depends on the real ExifTool probe timing.
+- `npm run typecheck` — passed.
+- `npm run lint` — passed.
+- `npm run format` — initially reported formatting drift in `src/adapters/sqlite-index.ts`; after Prettier write, passed.
+- `npm test` — passed (25 files, 283 tests).
+- `npm run build` — passed.
+- `npm audit` — passed, 0 vulnerabilities.
+- `npm run openspec:validate -- semantic-pick-query` — passed: `Change 'semantic-pick-query' is valid`.
+- `npm exec -- openspec list` — still reports legacy rules-format warnings for `apply`/`verify`; documented as pre-existing/out-of-scope and not fixed in this warning-cleanup batch.
+
+### Remaining Risk
+
+- None from the review findings. The semantic-pick-query change remains ready for final review; archive is still intentionally not performed in this batch.

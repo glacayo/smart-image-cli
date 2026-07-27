@@ -433,7 +433,6 @@ export class SqliteIndex {
     const safeJournalPath = this.resolveUsageJournalPath(options.usageJournalPath);
     const usageStaged = this.stageUsageJournal(safeJournalPath);
 
-    let atomic = false;
     const tx = this.db.transaction(() => {
       // Mark the rebuild as in-progress BEFORE deleting. If the process dies
       // here, the sentinel survives and the index cannot be silently treated
@@ -482,7 +481,6 @@ export class SqliteIndex {
         .run();
     });
     tx();
-    atomic = true;
 
     return {
       indexedOccurrences,
@@ -494,7 +492,8 @@ export class SqliteIndex {
         warnings: usageStaged.warnings
       },
       quarantinedOccurrences,
-      atomic
+      // Reaching this return means `tx()` committed; rollback paths throw before this point.
+      atomic: true
     };
   }
 
