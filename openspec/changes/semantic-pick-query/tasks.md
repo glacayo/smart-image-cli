@@ -11,7 +11,7 @@
 | Delivery strategy       | ask-on-risk                                                           |
 | Chain strategy          | stacked-to-main                                                       |
 
-Decision needed before apply: No — maintainer selected chained PR delivery; current scope is PR3 / work unit 3 only.
+Decision needed before apply: No — maintainer selected chained PR delivery; current scope is PR4 / work unit 4 only.
 Chained PRs recommended: Yes
 Chain strategy: stacked-to-main
 400-line budget risk: High
@@ -47,6 +47,6 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: E2E / Verification
 
-- [ ] 4.1 Extend `test/e2e/cli-flow.test.ts` for semantic flags, stderr default note, manifest `ranking`, AI failure, and no-query unchanged behavior.
-- [ ] 4.2 Verify with `npm run typecheck`, `npm test`, `npm run build`, and `npm run lint`.
-- [ ] 4.3 Confirm no DB migration, no new runtime dependency, and no source-image re-read/re-analysis path was introduced.
+- [x] 4.1 Extend `test/e2e/cli-flow.test.ts` for semantic flags, stderr default note, manifest `ranking`, AI failure, and no-query unchanged behavior.
+- [x] 4.2 Verify with `npm run typecheck`, `npm test`, `npm run build`, and `npm run lint`.
+- [x] 4.3 Confirm no DB migration, no new runtime dependency, and no source-image re-read/re-analysis path was introduced.

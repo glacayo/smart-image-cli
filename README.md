@@ -27,6 +27,22 @@ Smart Image CLI is designed for developers and AI coding agents that need to wor
 - Select the best available image for a requested section.
 - Track where images were used so agents avoid repeating assets in the same slot.
 
+## Picking images with semantic intent
+
+`img pick` can select from the existing local index with structured constraints and, when `--query` is present, rank only the constraint-eligible candidates by metadata.
+
+```bash
+img --json pick ./assets --category bathroom --query "bright naturally lit shower"
+img --json pick ./assets --category bathroom --query "bright shower" --semantic ai --top-k 5
+```
+
+- `--query <text>` enables intent ranking over indexed metadata (`subject`, `title`, `description`, `altText`, and `categories`).
+- `--semantic local|ai` selects the ranker. Omitted `--semantic` defaults to `local` and emits a non-fatal stderr note.
+- `--top-k <1..10>` bounds emitted ranking alternatives; the default is `3`.
+- Local mode is deterministic, requires no provider, and is the default to avoid hidden spend.
+- AI mode is explicit only and sends metadata text to the configured provider. It does not send image bytes, re-read images for ranking, or re-analyze images.
+- AI ranking failures return structured `ai_ranking_failed` output with provider-error exit code `4`; there is no silent local fallback.
+
 ## Planned stack
 
 | Concern | Choice |

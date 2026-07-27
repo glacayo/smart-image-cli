@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../../src/cli/program.js";
 import { SqliteIndex } from "../../src/adapters/sqlite-index.js";
 import type { Sidecar } from "../../src/adapters/sidecar-store.js";
@@ -12,6 +12,7 @@ import { rmWithRetry } from "../support/cleanup.js";
 const roots: string[] = [];
 
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await Promise.all(roots.map((root) => rmWithRetry(root)));
   roots.length = 0;
 });
@@ -69,6 +70,7 @@ describe("Phase 4 CLI e2e flow", () => {
 
     expect(pick.exitCode).toBe(0);
     expect(pick.json).toMatchObject({ ok: true, command: "pick" });
+    expect((pick.json.details as { manifest?: { ranking?: unknown } }).manifest?.ranking).toBeUndefined();
 
     const mark = await runImg([
       "--json",
@@ -135,6 +137,198 @@ describe("Phase 4 CLI e2e flow", () => {
     expect(noMatch.json).toMatchObject({ ok: false, reason: "no_candidate" });
     expect(invalid.exitCode).toBe(3);
     expect(invalid.json).toMatchObject({ ok: false, reason: "invalid_input" });
+  });
+
+  it("runs semantic local pick end-to-end with default note and ranking manifest", async () => {
+    const root = await semanticIndexedRoot([
+      imageFixture("bathroom/dark-sink.jpg", "Dark sink", "Bathroom", "shadow vanity", "bathroom"),
+      imageFixture(
+        "bathroom/bright-shower.jpg",
+        "Bright shower",
+        "Bathroom",
+        "bright naturally lit shower",
+        "bathroom"
+      ),
+      imageFixture("kitchen/bright-stove.jpg", "Bright stove", "Kitchen", "bright stove", "kitchen")
+    ]);
+
+    const result = await runImg([
+      "--json",
+      "pick",
+      root,
+      "--category",
+      "bathroom",
+      "--query",
+      "bright shower",
+      "--top-k",
+      "1"
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain("defaulted to --semantic local");
+    const manifest = result.json.details as {
+      manifest?: {
+        source?: string;
+        ranking?: {
+          status?: string;
+          mode?: string;
+          query?: string;
+          topK?: number;
+          alternatives?: Array<{ sha256?: string }>;
+        };
+      };
+    };
+    expect(manifest.manifest?.source).toBe("bathroom/bright-shower.jpg");
+    expect(manifest.manifest?.ranking).toMatchObject({
+      status: "ranked",
+      mode: "local",
+      query: "bright shower",
+      topK: 1
+    });
+    expect(manifest.manifest?.ranking?.alternatives).toHaveLength(1);
+  });
+
+  it("runs semantic AI pick with stubbed metadata-only provider payload", async () => {
+    const root = await semanticIndexedRoot([
+      imageFixture("bathroom/sink.jpg", "Sink", "Bathroom", "small sink", "bathroom"),
+      imageFixture("bathroom/shower.jpg", "Shower", "Bathroom", "large bright shower", "bathroom")
+    ]);
+    const appData = await tempRoot();
+    await writeUserConfig(appData, {
+      activeProvider: "gemini",
+      providers: {
+        gemini: {
+          provider: "gemini",
+          endpoint: "https://ranker.example/v1",
+          model: "ranker-test-model",
+          apiKey: "test-api-key"
+        }
+      }
+    });
+    const requestBodies: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = String(init?.body ?? "");
+        requestBodies.push(body);
+        const parsed = JSON.parse(body) as {
+          messages: Array<{ role: string; content: string }>;
+        };
+        const userPayload = JSON.parse(parsed.messages[1]!.content) as {
+          candidates: Array<{ sha256: string; title: string }>;
+        };
+        const shower = userPayload.candidates.find((candidate) => candidate.title === "Shower")!;
+        const sink = userPayload.candidates.find((candidate) => candidate.title === "Sink")!;
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    rankings: [
+                      { sha256: shower.sha256, score: 0.98, reason: "best bright shower match" },
+                      { sha256: sink.sha256, score: 0.4, reason: "weaker sink match" }
+                    ]
+                  })
+                }
+              }
+            ]
+          }),
+          { status: 200 }
+        );
+      })
+    );
+
+    const result = await runImg(
+      [
+        "--json",
+        "pick",
+        root,
+        "--category",
+        "bathroom",
+        "--query",
+        "bright shower",
+        "--semantic",
+        "ai",
+        "--top-k",
+        "1"
+      ],
+      { APPDATA: appData, XDG_CONFIG_HOME: appData }
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(requestBodies).toHaveLength(1);
+    expect(requestBodies[0]).not.toContain("image_url");
+    expect(requestBodies[0]).not.toContain("data:image");
+    expect(requestBodies[0]).not.toContain("imageBytes");
+    expect(requestBodies[0]).not.toContain("bathroom/shower.jpg");
+    const manifest = result.json.details as {
+      manifest?: { source?: string; ranking?: { mode?: string; reason?: string; alternatives?: unknown[] } };
+    };
+    expect(manifest.manifest?.source).toBe("bathroom/shower.jpg");
+    expect(manifest.manifest?.ranking).toMatchObject({
+      mode: "ai",
+      reason: "best bright shower match"
+    });
+    expect(manifest.manifest?.ranking?.alternatives).toHaveLength(1);
+  });
+
+  it("surfaces semantic AI provider failures without falling back to local ranking", async () => {
+    const root = await semanticIndexedRoot([
+      imageFixture("bathroom/sink.jpg", "Sink", "Bathroom", "small sink", "bathroom")
+    ]);
+    const appData = await tempRoot();
+    await writeUserConfig(appData, {
+      activeProvider: "gemini",
+      providers: {
+        gemini: {
+          provider: "gemini",
+          endpoint: "https://ranker.example/v1",
+          model: "ranker-test-model",
+          apiKey: "test-api-key"
+        }
+      }
+    });
+    const leakedSecret = "sk-pr4reviewwarningredactiontoken000001";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ error: { message: `rate limited Bearer ${leakedSecret}` } }),
+            { status: 429 }
+          )
+      )
+    );
+
+    const result = await runImg(
+      ["--json", "pick", root, "--category", "bathroom", "--query", "sink", "--semantic", "ai"],
+      { APPDATA: appData, XDG_CONFIG_HOME: appData }
+    );
+
+    expect(result.exitCode).toBe(4);
+    expect(result.json).toMatchObject({
+      ok: false,
+      status: "failed",
+      command: "pick",
+      reason: "ai_ranking_failed"
+    });
+    const failureDetails = result.json.details as
+      | { kind?: string; providerDetails?: unknown; manifest?: unknown; ranking?: unknown }
+      | undefined;
+    expect(failureDetails).toMatchObject({ kind: "RateLimit" });
+    expect(failureDetails?.manifest).toBeUndefined();
+    expect(failureDetails?.ranking).toBeUndefined();
+
+    const failureText = JSON.stringify(result.json);
+    expect(failureText).not.toContain('"ok":true');
+    expect(failureText).not.toContain('"manifest"');
+    expect(failureText).not.toContain('"ranking"');
+    expect(failureText).not.toContain('"mode":"local"');
+    expect(failureText).not.toContain("matched local metadata tokens");
+    expect(failureText).not.toContain(leakedSecret);
+    expect(failureText).toContain("[REDACTED]");
   });
 
   it("optimizes through the CLI and rejects path traversal without writes", async () => {
@@ -296,10 +490,17 @@ describe("Phase 4 CLI e2e flow", () => {
 async function runImg(
   args: string[],
   env: Partial<NodeJS.ProcessEnv> = {}
-): Promise<{ exitCode: number | undefined; stdout: string; json: Record<string, unknown> }> {
+): Promise<{
+  exitCode: number | undefined;
+  stdout: string;
+  stderr: string;
+  json: Record<string, unknown>;
+}> {
   let stdout = "";
+  let stderr = "";
   const originalExitCode = process.exitCode;
   const originalWrite = process.stdout.write;
+  const originalStderrWrite = process.stderr.write;
   // Capture the full set of env vars `getUserConfigDir` consults so the CLI
   // can never read the real user config on any platform, and so the originals
   // are restored even if the run throws.
@@ -327,15 +528,21 @@ async function runImg(
     stdout += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
     return true;
   }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+    return true;
+  }) as typeof process.stderr.write;
   try {
     await runCli(["node", "img", ...args]);
     return {
       exitCode: typeof process.exitCode === "number" ? process.exitCode : 0,
       stdout,
+      stderr,
       json: JSON.parse(stdout) as Record<string, unknown>
     };
   } finally {
     process.stdout.write = originalWrite;
+    process.stderr.write = originalStderrWrite;
     process.exitCode = originalExitCode;
     for (const key of envKeys) {
       restoreEnv(key, originalEnv[key]);
@@ -376,6 +583,71 @@ async function indexedRoot(): Promise<string> {
   await index.rebuildFromSidecars([sidecar]);
   index.close();
   return root;
+}
+
+type Fixture = {
+  rel: string;
+  title: string;
+  subject: string;
+  description: string;
+  category: string;
+};
+
+function imageFixture(
+  rel: string,
+  title: string,
+  subject: string,
+  description: string,
+  category: string
+): Fixture {
+  return { rel, title, subject, description, category };
+}
+
+async function semanticIndexedRoot(fixtures: readonly Fixture[]): Promise<string> {
+  const root = await tempRoot();
+  await fs.mkdir(path.join(root, ".img-ia", "sidecars"), { recursive: true });
+  const sidecars: Sidecar[] = [];
+  for (const fixture of fixtures) {
+    const rel = fixture.rel;
+    const fullPath = path.join(root, rel);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    await sharp({
+      create: { width: 200, height: 100, channels: 3, background: colorFor(rel) }
+    })
+      .jpeg()
+      .toFile(fullPath);
+    const bytes = await fs.readFile(fullPath);
+    const sha = crypto.createHash("sha256").update(bytes).digest("hex");
+    const sidecar: Sidecar = {
+      sha256: sha,
+      classification: {
+        subject: fixture.subject,
+        categories: [fixture.category],
+        orientation: "landscape",
+        altText: fixture.description,
+        title: fixture.title,
+        description: fixture.description,
+        suggestedSlug: fixture.title.toLowerCase().replace(/\s+/g, "-")
+      },
+      dims: { width: 200, height: 100 },
+      originalName: path.basename(rel),
+      model: "test",
+      canonicalRelPath: rel,
+      occurrences: [rel],
+      primaryFlag: "canonicalRelPath"
+    };
+    sidecars.push(sidecar);
+    await fs.writeFile(path.join(root, ".img-ia", "sidecars", `${sha}.json`), `${JSON.stringify(sidecar)}\n`);
+  }
+  const index = new SqliteIndex(root);
+  await index.rebuildFromSidecars(sidecars);
+  index.close();
+  return root;
+}
+
+function colorFor(seed: string): { r: number; g: number; b: number } {
+  const bytes = crypto.createHash("sha256").update(seed).digest();
+  return { r: bytes[0]!, g: bytes[1]!, b: bytes[2]! };
 }
 
 function rootShaFrom(json: Record<string, unknown>): string {
