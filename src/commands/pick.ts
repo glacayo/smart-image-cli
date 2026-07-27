@@ -1,8 +1,15 @@
 import type { Command } from "commander";
 import { EXIT_CODES } from "../cli/exit-codes.js";
 import { emitResult, errorResult, type CliResult } from "../cli/output.js";
-import { pickService, type PickOptions } from "../app/pick-service.js";
-import { serviceError } from "../app/runtime.js";
+import {
+  pickService,
+  type PickDeps,
+  type PickOptions,
+  type SemanticMode
+} from "../app/pick-service.js";
+import { buildTextRankerProvider, serviceError } from "../app/runtime.js";
+import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
+import { LocalTextRanker } from "../adapters/vision/local-text-ranker.js";
 import type { ImageOrientation } from "../domain/analysis-schema.js";
 import type { ImageFormat } from "../domain/resize-planner.js";
 
@@ -19,6 +26,7 @@ const VALID_FORMATS: ReadonlySet<string> = new Set<ImageFormat>([
   "webp",
   "avif"
 ]);
+const VALID_SEMANTIC_MODES: ReadonlySet<string> = new Set<SemanticMode>(["local", "ai"]);
 
 export function registerPickCommand(program: Command): void {
   program
@@ -34,6 +42,9 @@ export function registerPickCommand(program: Command): void {
     .option("--slot <slot>", "free-text usage slot")
     .option("--location <location>", "free-text usage location")
     .option("--allow-reuse", "allow reuse for the same slot and location")
+    .option("--query <text>", "free-text intent used to rank eligible candidates")
+    .option("--semantic <mode>", "semantic ranking mode: local or ai")
+    .option("--top-k <n>", "number of ranking/alternative entries to emit (1..10)")
     .action(async (root: string, options: Record<string, string | boolean>, command: Command) => {
       const globals = command.optsWithGlobals<{ json?: boolean }>();
       const numeric = validatePickNumerics(options);
@@ -49,7 +60,19 @@ export function registerPickCommand(program: Command): void {
         return;
       }
       try {
-        const outcome = await pickService(root, parsePickOptions(options));
+        const parsed = parsePickOptions(options);
+        if (parsed.query !== undefined && parsed.semantic === undefined) {
+          process.stderr.write("img pick: --query provided; defaulted to --semantic local\n");
+        }
+        let deps: PickDeps;
+        try {
+          deps = await buildPickDeps(root, parsed);
+        } catch (error) {
+          emitResult(aiRankingFailed(error), { json: globals.json });
+          process.exitCode = EXIT_CODES.PROVIDER_ERROR;
+          return;
+        }
+        const outcome = await pickService(root, parsed, deps);
         emitResult(outcome.result, { json: globals.json });
         process.exitCode = outcome.exitCode;
       } catch (error) {
@@ -64,6 +87,8 @@ function validatePickNumerics(options: Record<string, string | boolean>): CliRes
   if (widthErr) return widthErr;
   const heightErr = validateIntOption(options.height, "height");
   if (heightErr) return heightErr;
+  const topKErr = validateTopKOption(options.topK);
+  if (topKErr) return topKErr;
   return undefined;
 }
 
@@ -84,6 +109,14 @@ function validatePickEnums(options: Record<string, string | boolean>): CliResult
       `--format must be one of: ${[...VALID_FORMATS].join(", ")}, got: "${format}"`
     );
   }
+  const semantic = str(options.semantic);
+  if (semantic !== undefined && !VALID_SEMANTIC_MODES.has(semantic as SemanticMode)) {
+    return errorResult(
+      "pick",
+      "invalid_input",
+      `--semantic must be one of: ${[...VALID_SEMANTIC_MODES].join(", ")}, got: "${semantic}"`
+    );
+  }
   return undefined;
 }
 
@@ -97,12 +130,18 @@ export function validatePickIntOption(
 
 /** Exported for focused unit tests of enum flag validation. */
 export function validatePickEnumOption(
-  option: "orientation" | "format",
+  option: "orientation" | "format" | "semantic",
   value: string | undefined
 ): CliResult | undefined {
   if (value === undefined) return undefined;
-  const valid = option === "orientation" ? VALID_ORIENTATIONS : VALID_FORMATS;
-  const label = option === "orientation" ? "orientation" : "format";
+  const valid =
+    option === "orientation"
+      ? VALID_ORIENTATIONS
+      : option === "format"
+        ? VALID_FORMATS
+        : VALID_SEMANTIC_MODES;
+  const label =
+    option === "orientation" ? "orientation" : option === "format" ? "format" : "semantic";
   if (!valid.has(value)) {
     return errorResult(
       "pick",
@@ -111,6 +150,10 @@ export function validatePickEnumOption(
     );
   }
   return undefined;
+}
+
+export function validatePickTopKOption(value: string | boolean | undefined): CliResult | undefined {
+  return validateTopKOption(value);
 }
 
 function validateIntOption(
@@ -137,7 +180,18 @@ function validateIntOption(
   return undefined;
 }
 
-function parsePickOptions(options: Record<string, string | boolean>): PickOptions {
+function validateTopKOption(value: string | boolean | undefined): CliResult | undefined {
+  const err = validateIntOption(value, "top-k");
+  if (err) return err;
+  if (value === undefined || typeof value === "boolean") return undefined;
+  const parsed = Number.parseInt(value.trim(), 10);
+  if (parsed < 1 || parsed > 10) {
+    return errorResult("pick", "invalid_input", `--top-k must be between 1 and 10, got: ${value}`);
+  }
+  return undefined;
+}
+
+export function parsePickOptions(options: Record<string, string | boolean>): PickOptions {
   const parsed: PickOptions = { allowReuse: options.allowReuse === true };
   const category = str(options.category);
   if (category !== undefined) parsed.category = category;
@@ -159,7 +213,42 @@ function parsePickOptions(options: Record<string, string | boolean>): PickOption
   if (location !== undefined) parsed.location = location;
   const format = str(options.format);
   if (format !== undefined) parsed.format = format as NonNullable<PickOptions["format"]>;
+  const query = str(options.query)?.trim();
+  if (query) parsed.query = query;
+  const semantic = str(options.semantic);
+  if (semantic !== undefined) parsed.semantic = semantic as SemanticMode;
+  const topK = intOpt(options.topK);
+  if (topK !== undefined) parsed.topK = topK;
   return parsed;
+}
+
+export async function buildPickDeps(root: string, options: PickOptions): Promise<PickDeps> {
+  if (options.query === undefined) return {};
+  if ((options.semantic ?? "local") === "ai") {
+    try {
+      return { textRanker: await buildTextRankerProvider(root) };
+    } catch (error) {
+      throw new Error(
+        `AI ranking provider setup failed: ${
+          error instanceof Error
+            ? defaultSecretRedactor.mask(error.message)
+            : defaultSecretRedactor.mask(String(error))
+        }`,
+        { cause: error }
+      );
+    }
+  }
+  return { textRanker: new LocalTextRanker() };
+}
+
+function aiRankingFailed(error: unknown): CliResult {
+  return errorResult(
+    "pick",
+    "ai_ranking_failed",
+    error instanceof Error
+      ? defaultSecretRedactor.mask(error.message)
+      : defaultSecretRedactor.mask(String(error))
+  );
 }
 function str(value: string | boolean | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;

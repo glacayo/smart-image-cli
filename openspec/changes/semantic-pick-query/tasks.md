@@ -11,7 +11,7 @@
 | Delivery strategy       | ask-on-risk                                                           |
 | Chain strategy          | stacked-to-main                                                       |
 
-Decision needed before apply: No — maintainer selected chained PR delivery; current scope is PR2 / work unit 2 only.
+Decision needed before apply: No — maintainer selected chained PR delivery; current scope is PR3 / work unit 3 only.
 Chained PRs recommended: Yes
 Chain strategy: stacked-to-main
 400-line budget risk: High
@@ -40,10 +40,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Pick Service / CLI Wiring
 
-- [ ] 3.1 Modify `src/app/pick-service.ts` options/deps; map `ImageRecord` metadata, rank only eligible candidates when `query` exists, and emit success/no_candidate `ranking`.
-- [ ] 3.2 In `src/app/pick-service.ts`, map AI provider errors to `ai_ranking_failed` exit `4`, with no local fallback and no ranking usage row.
-- [ ] 3.3 Modify `src/commands/pick.ts` with `--query`, `--semantic local|ai`, `--top-k 1..10`, invalid-input exit `3`, default-local stderr note, and lazy ranker injection.
-- [ ] 3.4 Add `test/app/pick-semantic-service.test.ts` and `test/commands/pick-semantic-options.test.ts` for default local, explicit AI, invalid topK, unchanged no-query path, and failure mapping.
+- [x] 3.1 Modify `src/app/pick-service.ts` options/deps; map `ImageRecord` metadata, rank only eligible candidates when `query` exists, and emit success/no_candidate `ranking`.
+- [x] 3.2 In `src/app/pick-service.ts`, map AI provider errors to `ai_ranking_failed` exit `4`, with no local fallback and no ranking usage row.
+- [x] 3.3 Modify `src/commands/pick.ts` with `--query`, `--semantic local|ai`, `--top-k 1..10`, invalid-input exit `3`, default-local stderr note, and lazy ranker injection.
+- [x] 3.4 Add `test/app/pick-semantic-service.test.ts` and `test/commands/pick-semantic-options.test.ts` for default local, explicit AI, invalid topK, unchanged no-query path, and failure mapping.
 
 ## Phase 4: E2E / Verification
 

@@ -7,17 +7,53 @@ import { SidecarStore } from "../adapters/sidecar-store.js";
 import { SharpProcessor } from "../adapters/sharp-processor.js";
 import { StorageRootGuard } from "../adapters/storage-root-guard.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
+import { LocalTextRanker } from "../adapters/vision/local-text-ranker.js";
+import {
+  VisionProviderError,
+  type RankingEntry,
+  type TextRankerProvider
+} from "../adapters/vision/provider.js";
 import { planResize, type ImageFormat } from "../domain/resize-planner.js";
-import { matchSlot, type SlotRequest } from "../domain/slot-matcher.js";
+import { matchSlot, type SlotAlternative, type SlotRequest } from "../domain/slot-matcher.js";
 import { sanitizeSlug } from "../domain/slug-namer.js";
 import { appendUsage, ensureIndexReady, stableNow, type ServiceOutcome } from "./runtime.js";
 
-export type PickOptions = SlotRequest & { format?: ImageFormat };
+export type SemanticMode = "local" | "ai";
+
+export type PickOptions = SlotRequest & {
+  format?: ImageFormat;
+  query?: string;
+  semantic?: SemanticMode;
+  topK?: number;
+};
 
 export type PickDeps = {
   /** Inject an alternate index (e.g. a failing/stub for tests). When omitted, a fresh `SqliteIndex(root)` is created and owned by the service. */
   index?: SqliteIndex;
+  /** Inject a semantic text ranker. Required by command wiring for AI mode; local mode falls back to LocalTextRanker. */
+  textRanker?: TextRankerProvider;
 };
+
+type RankingBlock = {
+  status: "ranked";
+  mode: SemanticMode;
+  query: string;
+  reason: string;
+  score: number;
+  topK: number;
+  alternatives: Array<{ sha256: string; score: number; reason: string }>;
+};
+
+type NoCandidateRankingBlock = {
+  status: "no_candidate";
+  mode: SemanticMode;
+  query: string;
+  reason: "no_candidate";
+  score: 0;
+  alternatives: [];
+};
+
+const MAX_RANKING_QUERY_LENGTH = 160;
 
 export async function pickService(
   rootInput: string,
@@ -37,23 +73,58 @@ export async function pickService(
         sha256: r.sha256,
         canonicalRelPath: r.canonicalRelPath,
         categories: r.classification.categories,
+        subject: r.classification.subject,
+        title: r.classification.title,
+        description: r.classification.description,
+        altText: r.classification.altText,
         orientation: r.classification.orientation,
         dims: r.dims,
         used: r.used
       })),
-      options
+      options,
+      options.topK === undefined ? {} : { topK: options.topK }
     );
+    const semantic = semanticMode(options);
+    const topK = options.topK ?? 3;
     if (!match.ok)
       return {
         result: errorResult(
           "pick",
           "no_candidate",
           "No indexed image satisfies the requested slot constraints",
-          { alternatives: match.alternatives }
+          {
+            alternatives: match.alternatives,
+            ...(semantic ? { ranking: noCandidateRanking(semantic) } : {})
+          }
         ),
         exitCode: EXIT_CODES.NO_MATCH
       };
-    const candidate = records.find((r) => r.sha256 === match.candidate.sha256)!;
+
+    let ranking: Awaited<ReturnType<typeof rankEligibleCandidates>> | undefined;
+    try {
+      ranking = semantic
+        ? await rankEligibleCandidates(semantic, topK, match.eligible, deps.textRanker)
+        : undefined;
+    } catch (error) {
+      if (error instanceof AiRankingFailedError) {
+        return aiRankingFailed(error.cause);
+      }
+      throw error;
+    }
+    if (semantic && ranking === undefined) {
+      return {
+        result: errorResult(
+          "pick",
+          "no_candidate",
+          "No ranked image candidate was returned for the semantic query",
+          { alternatives: match.alternatives, ranking: noCandidateRanking(semantic) }
+        ),
+        exitCode: EXIT_CODES.NO_MATCH
+      };
+    }
+
+    const selectedSha = ranking?.selected.sha256 ?? match.candidate.sha256;
+    const candidate = records.find((r) => r.sha256 === selectedSha)!;
     const format = options.format ?? "jpg";
     const resizeTarget = {
       format,
@@ -68,7 +139,11 @@ export async function pickService(
           "pick",
           "no_candidate",
           "Candidate cannot satisfy request without upscaling",
-          { cause: plan.reason, alternatives: match.alternatives }
+          {
+            cause: plan.reason,
+            alternatives: match.alternatives,
+            ...(ranking ? { ranking: ranking.block } : {})
+          }
         ),
         exitCode: EXIT_CODES.NO_MATCH
       };
@@ -152,13 +227,137 @@ export async function pickService(
           width: asset.width,
           height: asset.height,
           format: asset.format,
-          usage
+          usage,
+          ...(ranking ? { ranking: ranking.block } : {})
         }
       }),
       exitCode: EXIT_CODES.SUCCESS
     };
   } finally {
     if (ownIndex) index.close();
+  }
+}
+
+function semanticMode(options: PickOptions): { mode: SemanticMode; query: string } | undefined {
+  const query = options.query?.trim();
+  if (!query) return undefined;
+  return { mode: options.semantic ?? "local", query };
+}
+
+async function rankEligibleCandidates(
+  semantic: { mode: SemanticMode; query: string },
+  topK: number,
+  eligible: readonly SlotAlternative[],
+  injectedRanker: TextRankerProvider | undefined
+): Promise<{ selected: RankingEntry; block: RankingBlock } | undefined> {
+  const ranker = injectedRanker ?? (semantic.mode === "local" ? new LocalTextRanker() : undefined);
+  if (ranker === undefined) {
+    throw new AiRankingFailedError(new Error("AI semantic ranking requires a TextRankerProvider"));
+  }
+  const candidates = eligible.map(({ candidate }) => ({
+    sha256: candidate.sha256,
+    subject: candidate.subject ?? "",
+    title: candidate.title ?? "",
+    description: candidate.description ?? "",
+    altText: candidate.altText ?? "",
+    categories: candidate.categories
+  }));
+  if (candidates.length === 0) return undefined;
+
+  let ranked: RankingEntry[];
+  try {
+    ranked = await ranker.rank(semantic.query, candidates);
+  } catch (error) {
+    if (semantic.mode === "ai" || error instanceof VisionProviderError) {
+      throw new AiRankingFailedError(error);
+    }
+    throw error;
+  }
+
+  const eligibleSha = new Set(candidates.map((candidate) => candidate.sha256));
+  const selected = ranked.find((entry) => eligibleSha.has(entry.sha256));
+  if (selected === undefined) {
+    if (semantic.mode === "ai") {
+      throw new AiRankingFailedError(
+        new VisionProviderError(
+          "MalformedOutput",
+          "AI semantic ranking returned no eligible candidate",
+          {
+            rankedCount: ranked.length
+          }
+        )
+      );
+    }
+    return undefined;
+  }
+
+  return {
+    selected,
+    block: {
+      status: "ranked",
+      mode: semantic.mode,
+      query: safeRankingQuery(semantic.query),
+      reason: defaultSecretRedactor.mask(selected.reason),
+      score: selected.score,
+      topK,
+      alternatives: ranked
+        .filter((entry) => entry.sha256 !== selected.sha256 && eligibleSha.has(entry.sha256))
+        .slice(0, topK)
+        .map((entry) => ({
+          sha256: entry.sha256,
+          score: entry.score,
+          reason: defaultSecretRedactor.mask(entry.reason)
+        }))
+    }
+  };
+}
+
+function aiRankingFailed(error: unknown): ServiceOutcome {
+  const details =
+    error instanceof VisionProviderError
+      ? {
+          kind: error.kind,
+          providerDetails: defaultSecretRedactor.maskValue(error.redactedDetails)
+        }
+      : undefined;
+  return {
+    result: errorResult(
+      "pick",
+      "ai_ranking_failed",
+      error instanceof Error
+        ? defaultSecretRedactor.mask(error.message)
+        : defaultSecretRedactor.mask(String(error)),
+      details
+    ),
+    exitCode: EXIT_CODES.PROVIDER_ERROR
+  };
+}
+
+function noCandidateRanking(semantic: {
+  mode: SemanticMode;
+  query: string;
+}): NoCandidateRankingBlock {
+  return {
+    status: "no_candidate",
+    mode: semantic.mode,
+    query: safeRankingQuery(semantic.query),
+    reason: "no_candidate",
+    score: 0,
+    alternatives: []
+  };
+}
+
+function safeRankingQuery(query: string): string {
+  const masked = defaultSecretRedactor.mask(query);
+  return masked.length <= MAX_RANKING_QUERY_LENGTH
+    ? masked
+    : `${masked.slice(0, MAX_RANKING_QUERY_LENGTH - 1)}…`;
+}
+
+export class AiRankingFailedError extends Error {
+  constructor(readonly cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "AiRankingFailedError";
   }
 }
 

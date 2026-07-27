@@ -67,6 +67,7 @@ describe("SecretRedactor", () => {
     const redactor = new SecretRedactor();
     const masked = redactor.mask("https://host.com?api_key=x");
     expect(masked).not.toContain("api_key=x");
+    expect(masked).toBe("https://host.com?api_key=[REDACTED]");
     expect(masked).toContain("[REDACTED]");
   });
 
