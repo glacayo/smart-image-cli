@@ -1,9 +1,13 @@
 import type { SecretRedactor } from "../secret-redactor.js";
 import {
+  AuthProviderError,
+  EndpointNotFoundProviderError,
   MalformedOutputProviderError,
+  ModelNotFoundProviderError,
   RateLimitProviderError,
   RefusalProviderError,
-  TimeoutProviderError
+  TimeoutProviderError,
+  type VisionProviderError
 } from "./provider.js";
 
 export type ChatCompletionResponse = {
@@ -32,6 +36,9 @@ export type ChatCompletionTransportOptions = {
   httpErrorMessage: (status: number) => string;
   nonJsonMessage: string;
   requestFailedMessage: string;
+  /** Optional explicit model id used in ModelNotFound messages. */
+  model?: string;
+  authErrorMessage?: string;
 };
 
 export type ChatCompletionContentOptions = {
@@ -64,10 +71,7 @@ export async function postChatCompletion(
       throw new RateLimitProviderError(options.rateLimitMessage, redact(options, bodyText));
     }
     if (!response.ok) {
-      throw new MalformedOutputProviderError(
-        options.httpErrorMessage(response.status),
-        redact(options, bodyText)
-      );
+      throw classifyHttpError(response.status, bodyText, options);
     }
 
     try {
@@ -130,6 +134,122 @@ export function stripJsonFence(content: string): string {
     .trim();
 }
 
+function classifyHttpError(
+  status: number,
+  bodyText: string,
+  options: ChatCompletionTransportOptions
+): VisionProviderError {
+  const redacted = redact(options, bodyText);
+
+  if (status === 401 || status === 403) {
+    return new AuthProviderError(
+      options.authErrorMessage ?? "Provider authentication failed",
+      redacted
+    );
+  }
+
+  if (status === 404) {
+    const model = resolveModelId(options);
+    if (looksLikeModelNotFound(bodyText)) {
+      const namedModel = model ?? extractModelNameFromBody(bodyText) ?? "unknown";
+      return new ModelNotFoundProviderError(
+        `Model "${namedModel}" was not found. Run \`img config setup\` to choose an available model.`,
+        namedModel,
+        redacted
+      );
+    }
+    return new EndpointNotFoundProviderError(
+      `Provider endpoint was not found: ${options.endpoint}`,
+      options.endpoint,
+      redacted
+    );
+  }
+
+  return new MalformedOutputProviderError(options.httpErrorMessage(status), redacted);
+}
+
+function resolveModelId(options: ChatCompletionTransportOptions): string | undefined {
+  if (typeof options.model === "string" && options.model.length > 0) {
+    return options.model;
+  }
+  if (options.body !== null && typeof options.body === "object" && "model" in options.body) {
+    const model = (options.body as { model?: unknown }).model;
+    if (typeof model === "string" && model.length > 0) return model;
+  }
+  return undefined;
+}
+
+function looksLikeModelNotFound(bodyText: string): boolean {
+  const parsed = tryParseJson(bodyText);
+  if (parsed !== null) {
+    const err = (parsed as { error?: unknown }).error;
+    if (typeof err === "string") {
+      return mentionsMissingModel(err);
+    }
+    if (err !== null && typeof err === "object") {
+      const record = err as {
+        code?: unknown;
+        type?: unknown;
+        message?: unknown;
+        param?: unknown;
+      };
+      const code = stringifyField(record.code).toLowerCase();
+      const type = stringifyField(record.type).toLowerCase();
+      const param = stringifyField(record.param).toLowerCase();
+      const message = stringifyField(record.message);
+
+      if (code === "model_not_found" || code.includes("model_not_found")) return true;
+      if (param === "model" && (code.includes("not_found") || type.includes("not_found"))) {
+        return true;
+      }
+      if (param === "model" && mentionsMissingModel(message)) return true;
+      if (mentionsMissingModel(message)) return true;
+      if (code.includes("model") && (code.includes("not_found") || type.includes("not_found"))) {
+        return true;
+      }
+    }
+  }
+
+  return mentionsMissingModel(bodyText);
+}
+
+function mentionsMissingModel(text: string): boolean {
+  const lower = text.toLowerCase();
+  if (!lower.includes("model")) return false;
+  return (
+    lower.includes("not found") ||
+    lower.includes("does not exist") ||
+    lower.includes("unknown model") ||
+    lower.includes("no such model") ||
+    lower.includes("model_not_found")
+  );
+}
+
+function extractModelNameFromBody(bodyText: string): string | undefined {
+  const parsed = tryParseJson(bodyText);
+  if (parsed === null) return undefined;
+  const err = (parsed as { error?: unknown }).error;
+  if (err === null || typeof err !== "object") return undefined;
+  const message = stringifyField((err as { message?: unknown }).message);
+  const tick = message.match(/`([^`]+)`/);
+  if (tick?.[1]) return tick[1];
+  const quoted = message.match(/"([^"]+)"/);
+  if (quoted?.[1]) return quoted[1];
+  return undefined;
+}
+
+function tryParseJson(text: string): unknown | null {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function stringifyField(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 function extractTextContent(content: ChatMessageContent): string | null {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
@@ -149,7 +269,10 @@ function isKnownProviderError(error: unknown): boolean {
     error instanceof RateLimitProviderError ||
     error instanceof MalformedOutputProviderError ||
     error instanceof RefusalProviderError ||
-    error instanceof TimeoutProviderError
+    error instanceof TimeoutProviderError ||
+    error instanceof AuthProviderError ||
+    error instanceof ModelNotFoundProviderError ||
+    error instanceof EndpointNotFoundProviderError
   );
 }
 

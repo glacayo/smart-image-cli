@@ -68,6 +68,7 @@ export class OpenAICompatTextRanker implements TextRankerProvider {
     const body = await postChatCompletion({
       endpoint: this.endpoint,
       apiKey: this.apiKey,
+      model: this.model,
       body: this.requestBody(query, payloadCandidates),
       timeoutMs: this.timeoutMs,
       fetchImpl: this.fetchImpl,
@@ -75,7 +76,8 @@ export class OpenAICompatTextRanker implements TextRankerProvider {
       rateLimitMessage: "Text ranker provider rate limit",
       httpErrorMessage: (status) => `Text ranker provider returned HTTP ${status}`,
       nonJsonMessage: "Text ranker provider returned non-JSON response",
-      requestFailedMessage: "Text ranker provider request failed"
+      requestFailedMessage: "Text ranker provider request failed",
+      authErrorMessage: "Text ranker provider authentication failed"
     });
 
     return this.parseResponse(

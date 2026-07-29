@@ -1,29 +1,29 @@
 schema: spec-driven
 
 context: |
-  Project: img-ia-analyzer-resizer — global console tool for developers/agents
-  Stack: greenfield; no language chosen yet (Node 24, Go 1.26, Python 3.14, Bun 1.3 available)
-  Architecture: CLI tool; AI image analysis, rename/classify, per-folder indexes, optimize (JPG/PNG/AVIF/WEBP), resize/crop, section selection, used-tracking
-  Testing: none detected (no runner, no linter, no formatter)
-  Style: TBD — no conventions detected yet
+  Project: smart-image-cli (img-ia-analyzer-resizer) — agent-friendly CLI, published as `img`
+  Stack: Node >=22, TypeScript 5.7 (ESM), Commander, Zod, Sharp, better-sqlite3, exiftool-vendored
+  Architecture: layered CLI — src/cli (commands/output), src/app (services/runtime), src/adapters (vision/db/fs), src/domain, src/config
+  Testing: vitest (unit/integration/e2e dirs under test/), eslint (flat config) + typescript-eslint, prettier, tsc --noEmit
+  Style: strict Zod schemas at config boundaries, typed provider error taxonomy, secret redaction on project config
 
-strict_tdd: false
-tdd_reason: no test runner detected; strict TDD unavailable until a stack is chosen and a runner is installed
+strict_tdd: true
+tdd_reason: vitest runner detected with existing unit/integration/e2e coverage; strict TDD enabled
 
 testing:
-  detected: 2026-07-22
-  runner: none
+  detected: 2026-07-29
+  runner: vitest (vitest run)
   layers:
-    unit: unavailable
-    integration: unavailable
-    e2e: unavailable
+    unit: available (test/domain, test/app, test/adapters, test/config)
+    integration: available (test/integration, test/commands)
+    e2e: available (test/e2e)
   coverage:
     available: false
     command: ""
   quality:
-    linter: unavailable
-    type_checker: unavailable
-    formatter: unavailable
+    linter: available (eslint . — eslint.config.js, typescript-eslint)
+    type_checker: available (tsc --noEmit)
+    formatter: available (prettier --check)
 
 rules:
   proposal:
@@ -39,11 +39,11 @@ rules:
     - Group by phase, use hierarchical numbering
     - Keep tasks completable in one session
   apply:
-    tdd: false
-    test_command: ""
+    tdd: true
+    test_command: "npm test"
   verify:
-    test_command: ""
-    build_command: ""
+    test_command: "npm test"
+    build_command: "npm run build"
     coverage_threshold: 0
   archive:
     - Warn before merging destructive deltas

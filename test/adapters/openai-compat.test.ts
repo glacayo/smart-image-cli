@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { OpenAICompatVisionProvider } from "../../src/adapters/vision/openai-compat.js";
 import {
+  AuthProviderError,
   MalformedOutputProviderError,
+  ModelNotFoundProviderError,
   RateLimitProviderError,
   RefusalProviderError,
   TimeoutProviderError
@@ -59,6 +61,39 @@ describe("OpenAICompatVisionProvider", () => {
     const provider = makeProvider(fetchImpl);
 
     await expect(provider.analyze(visionInput)).rejects.toBeInstanceOf(RateLimitProviderError);
+  });
+
+  it("maps HTTP 401 to AuthProviderError", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(401, { error: "Unauthorized" }));
+    const provider = makeProvider(fetchImpl);
+
+    await expect(provider.analyze(visionInput)).rejects.toBeInstanceOf(AuthProviderError);
+  });
+
+  it("maps HTTP 404 model_not_found to ModelNotFoundProviderError naming the model", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      makeResponse(404, {
+        error: {
+          message: "The model `test-model` does not exist",
+          code: "model_not_found",
+          param: "model"
+        }
+      })
+    );
+    const provider = makeProvider(fetchImpl);
+
+    try {
+      await provider.analyze(visionInput);
+      expect.fail("should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ModelNotFoundProviderError);
+      expect(error).not.toBeInstanceOf(MalformedOutputProviderError);
+      const typed = error as ModelNotFoundProviderError;
+      expect(typed.model).toBe("test-model");
+      expect(typed.message).toContain("test-model");
+      expect(typed.message.toLowerCase()).toMatch(/config setup|setup/);
+      expect(JSON.stringify(typed.redactedDetails)).not.toContain(apiKey);
+    }
   });
 
   it("maps timeout/abort to TimeoutProviderError", async () => {

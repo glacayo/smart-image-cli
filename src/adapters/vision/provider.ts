@@ -42,7 +42,14 @@ export interface TextRankerProvider {
   rank(query: string, candidates: readonly RankingCandidateMeta[]): Promise<RankingEntry[]>;
 }
 
-export type VisionErrorKind = "RateLimit" | "Timeout" | "Refusal" | "MalformedOutput";
+export type VisionErrorKind =
+  | "RateLimit"
+  | "Timeout"
+  | "Refusal"
+  | "MalformedOutput"
+  | "Auth"
+  | "ModelNotFound"
+  | "EndpointNotFound";
 
 export class VisionProviderError extends Error {
   constructor(
@@ -77,5 +84,33 @@ export class RefusalProviderError extends VisionProviderError {
 export class MalformedOutputProviderError extends VisionProviderError {
   constructor(message: string, redactedDetails?: unknown, options?: ErrorOptions) {
     super("MalformedOutput", message, redactedDetails, options);
+  }
+}
+
+export class AuthProviderError extends VisionProviderError {
+  constructor(message: string, redactedDetails?: unknown, options?: ErrorOptions) {
+    super("Auth", message, redactedDetails, options);
+  }
+}
+
+export class ModelNotFoundProviderError extends VisionProviderError {
+  constructor(
+    message: string,
+    readonly model: string,
+    redactedDetails?: unknown,
+    options?: ErrorOptions
+  ) {
+    super("ModelNotFound", message, redactedDetails, options);
+  }
+}
+
+export class EndpointNotFoundProviderError extends VisionProviderError {
+  constructor(
+    message: string,
+    readonly endpoint: string,
+    redactedDetails?: unknown,
+    options?: ErrorOptions
+  ) {
+    super("EndpointNotFound", message, redactedDetails, options);
   }
 }
