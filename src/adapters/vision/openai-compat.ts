@@ -40,6 +40,7 @@ export class OpenAICompatVisionProvider implements VisionProvider {
     const body = await postChatCompletion({
       endpoint: this.endpoint,
       apiKey: this.apiKey,
+      model: this.model,
       body: this.requestBody(input),
       timeoutMs: this.timeoutMs,
       fetchImpl: this.fetchImpl,
@@ -47,7 +48,8 @@ export class OpenAICompatVisionProvider implements VisionProvider {
       rateLimitMessage: "Vision provider rate limit",
       httpErrorMessage: (status) => `Vision provider returned HTTP ${status}`,
       nonJsonMessage: "Vision provider returned non-JSON response",
-      requestFailedMessage: "Vision provider request failed"
+      requestFailedMessage: "Vision provider request failed",
+      authErrorMessage: "Vision provider authentication failed"
     });
 
     return this.parseResponse(body);

@@ -12,7 +12,11 @@ export const VISION_PROVIDER_PRESETS: Record<VisionProviderId, VisionProviderPre
     id: "ollama",
     label: "Ollama Cloud",
     endpoint: "https://ollama.com/v1",
-    defaultModel: "llama3.2-vision"
+    // Live GET https://ollama.com/v1/models (2026-07-29, metadata only):
+    // llama3.2-vision absent; minimax-m3 present. Beta evidence: minimax-m3
+    // accepts image input (glm-5.2 does not). Chat completions returned 401
+    // with the configured key, so chat reachability could not be re-probed.
+    defaultModel: "minimax-m3"
   },
   openrouter: {
     id: "openrouter",
