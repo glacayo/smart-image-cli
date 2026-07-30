@@ -34,8 +34,8 @@ Chain strategy: feature-branch-chain
 
 ## Phase 2: PR2 Discovery / Hints
 
-- [ ] 2.1 RED: tests for OpenAI-compatible/OpenRouter/Gemini/Ollama listings, unsupported, non-JSON, auth, `true|false|null`, warn-not-block.
-- [ ] 2.2 GREEN/REFACTOR: create `src/adapters/vision/model-discovery.ts` and `vision-hints.ts`; metadata-only, no image bytes/paid probes.
+- [x] 2.1 RED: tests for OpenAI-compatible/OpenRouter/Gemini/Ollama listings, unsupported, non-JSON, auth, `true|false|null`, warn-not-block.
+- [x] 2.2 GREEN/REFACTOR: create `src/adapters/vision/model-discovery.ts` and `vision-hints.ts`; metadata-only, no image bytes/paid probes.
 
 ## Phase 3: PR3 Config Models / Key Test
 

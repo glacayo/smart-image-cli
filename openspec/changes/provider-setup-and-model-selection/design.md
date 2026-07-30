@@ -93,6 +93,6 @@ Risks: stale capability metadata → warn-not-block; divergent list endpoints �
 ## Open Questions (live verification at implementation — none block design)
 
 - [x] Verified vision-capable Ollama Cloud default model id → `minimax-m3` (GET `https://ollama.com/v1/models` 2026-07-29: `llama3.2-vision` absent, `minimax-m3` present; beta evidence image-accept; chat path 401 so chat not re-probed)
-- [ ] Ollama `/v1/models` capability metadata? Else finalize curated list (PR2)
-- [ ] OpenRouter `/models` may be public — key validation may need `authCheckPath: /key` (PR2)
-- [ ] Gemini model id normalization (`models/` prefix) in listings (PR2)
+- [x] Ollama `/v1/models` capability metadata? Else finalize curated list (PR2) → no modality fields; curated allow/deny in `vision-hints.ts` (`minimax-m3` true, `glm-5.x` false)
+- [x] OpenRouter `/models` may be public — key validation may need `authCheckPath: /key` (PR2) → deferred: discovery still sends Bearer; auth 401/403 typed; optional `authCheckPath` left for PR3 if public listing proves insufficient for key test
+- [x] Gemini model id normalization (`models/` prefix) in listings (PR2) → strip `models/` in `normalizeModelId`
