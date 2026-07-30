@@ -31,6 +31,8 @@ import {
   isNodeError,
   type ServiceOutcome
 } from "./runtime.js";
+import { setupService, type SetupServiceOptions } from "./setup-service.js";
+import type { Prompter } from "../cli/prompter.js";
 
 const SECRET_KEY_NAME = /(api[-_]?key|authorization|bearer|token|secret|password|credential)/i;
 const API_KEY_SEGMENT = /^api[-_]?key$/i;
@@ -42,7 +44,12 @@ export type ConfigServiceOptions = {
   userConfigPath?: string;
   provider?: string;
   endpoint?: string;
+  apiKey?: string;
+  model?: string;
+  yes?: boolean;
   fetchImpl?: typeof fetch;
+  prompter?: Prompter;
+  isTty?: boolean;
   /** When provided, human-mode connection outcomes are written here. */
   stderr?: NodeJS.WritableStream;
 };
@@ -154,6 +161,22 @@ export async function configService(
 
   const userConfigPath = options.userConfigPath;
   const current = await readUserConfig(userConfigPath);
+
+  if (action === "setup") {
+    const setupOptions: SetupServiceOptions = {
+      ...(options.provider !== undefined ? { provider: options.provider } : {}),
+      ...(options.apiKey !== undefined ? { apiKey: options.apiKey } : {}),
+      ...(options.model !== undefined ? { model: options.model } : {}),
+      ...(options.endpoint !== undefined ? { endpoint: options.endpoint } : {}),
+      ...(options.yes !== undefined ? { yes: options.yes } : {}),
+      ...(userConfigPath !== undefined ? { userConfigPath } : {}),
+      ...(options.fetchImpl !== undefined ? { fetchImpl: options.fetchImpl } : {}),
+      ...(options.prompter !== undefined ? { prompter: options.prompter } : {}),
+      ...(options.isTty !== undefined ? { isTty: options.isTty } : {}),
+      ...(options.stderr !== undefined ? { stderr: options.stderr } : {})
+    };
+    return setupService(setupOptions);
+  }
 
   if (action === "models") {
     return listProviderModels(current, options);
@@ -469,7 +492,7 @@ function invalid(): ServiceOutcome {
     result: errorResult(
       "config",
       "invalid_input",
-      "Expected config list|get <key>|set <key> <value>|models"
+      "Expected config list|get <key>|set <key> <value>|models|setup"
     ),
     exitCode: EXIT_CODES.INVALID_INPUT
   };

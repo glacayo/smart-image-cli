@@ -44,9 +44,9 @@ Chain strategy: feature-branch-chain
 
 ## Phase 4: PR4 Setup Wizard
 
-- [ ] 4.1 RED: `test/app/setup-service.test.ts` for non-TTY flags, exit `3`, invalid key exit `4`, no hang, persisted analyze reuse.
-- [ ] 4.2 RED: `src/cli/prompter.ts` tests for masked TTY key entry and manual model fallback.
-- [ ] 4.3 GREEN/REFACTOR: create `src/app/setup-service.ts` and `src/cli/prompter.ts`; wire setup flags in `src/commands/config.ts`.
+- [x] 4.1 RED: `test/app/setup-service.test.ts` for non-TTY flags, exit `3`, invalid key exit `4`, no hang, persisted analyze reuse.
+- [x] 4.2 RED: `src/cli/prompter.ts` tests for masked TTY key entry and manual model fallback.
+- [x] 4.3 GREEN/REFACTOR: create `src/app/setup-service.ts` and `src/cli/prompter.ts`; wire setup flags in `src/commands/config.ts`.
 
 ## Phase 5: PR5 Doctor / Final Gates
 

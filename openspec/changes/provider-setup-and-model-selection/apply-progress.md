@@ -6,7 +6,7 @@
 
 ## Slice
 
-PR3 — `config models` + API-key connection test.
+PR4 — guided provider setup wizard (`config setup`).
 
 ## Mode
 
@@ -15,54 +15,64 @@ Strict TDD.
 ## Delivery
 
 - Strategy: auto-chain / feature-branch-chain
-- Branch: `feat/provider-config-models`
-- Base: merged PR2 on main
-- Review budget note: authored PR3 diff ≈ 680–700 lines (prod ~290 + focused tests ~390). Kept as one cohesive work unit (shared provider resolution + discovery client). Over 400-line budget; no clean sub-split without breaking the models/key-test contract. Reviewer may treat tests as secondary to `config-service.ts` / `config.ts` core.
+- Branch: `feat/provider-setup-wizard`
+- Base: merged PR3 on main
+- Review budget note: authored PR4 diff ≈ 1,100 lines (prod ~485 + focused tests ~615). Kept as one cohesive work unit (setup orchestration + prompter + CLI flags + non-TTY/e2e contracts). **Over 400-line budget** — no clean sub-split without breaking the interactive/non-interactive setup contract or leaving untested prompter seams. Reviewer may treat `setup-service.ts` + `prompter.ts` as core and tests as secondary. Documented size:exception warning for this cohesive slice (same pattern as PR3).
 
 ## Scope
 
-- Add `config models` action listing provider models via `ModelDiscoveryClient`.
-- Annotate listings with vision hints; warn-not-block for unknown/non-vision.
-- Fallback messaging when discovery unsupported/unparseable (`source: "unavailable"`).
-- Wire API-key `config set` to connection test (GET `/models`); JSON `connectionTest` + human stderr outcome.
-- CLI flags: `--provider`, `--endpoint`.
-- Typed errors: `provider_auth`, `endpoint_not_found`, `model_not_found` → exit 4; no secret leakage.
-- Out of scope: PR4 setup wizard, PR5 doctor/docs/beta cleanup.
+- Add `img config setup` guided flow: provider → API key → connection test → model discovery/selection → user-scoped persist.
+- Non-TTY / `--json`: require `--provider`, `--api-key`, `--model` (optional `--endpoint`, `--yes`); never prompt; exit `3` if incomplete.
+- TTY: `prompter` seam (masked password, select, input, confirm); manual model when discovery unavailable.
+- Vision hints: recommend vision models; warn-not-block on unknown/non-vision (`--yes` or confirm).
+- Typed failures: `provider_auth` / `endpoint_not_found` → exit `4`; no secret leakage on stdout/stderr/JSON.
+- Wire flags in `src/commands/config.ts`; route `setup` via `configService` → `setupService`.
+- Out of scope: PR5 doctor/docs/beta cleanup.
 
 ## TDD Cycle Evidence
 
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
 |------|-----------|-------|------------|-----|-------|-------------|----------|
-| 3.1 Models/key-set RED | `test/app/config-service-models.test.ts`, `test/commands/config.test.ts` | Unit + command integration | ✅ 33/33 `config-doctor-library` | ✅ 10 failing before impl | ✅ 12/12 after GREEN | ✅ discovery success, unavailable fallback, auth, endpoint 404, provider/endpoint overrides, missing key, key-set ok/fail/stderr/non-apiKey, CLI flag routing | ✅ Compacted helpers + `providerFailure` |
-| 3.2 GREEN/REFACTOR | `src/app/config-service.ts`, `src/commands/config.ts` | App + CLI | ✅ Existing config tests still green | Driven by 3.1 | ✅ Focused + full suite | Covered design JSON shapes | ✅ exactOptionalPropertyTypes-safe option spreads |
+| 4.1 Setup service RED | `test/app/setup-service.test.ts`, `test/e2e/config-setup.test.ts`, `test/commands/config-setup.test.ts` | Unit + e2e + command | ✅ 45/45 config-doctor/models/command | ✅ Failing imports + incomplete/happy/auth paths before impl | ✅ 18/18 focused after GREEN | ✅ non-TTY happy, incomplete exit 3, auth 4, endpoint 404, manual fallback, non-vision+yes, existing config update, TTY prompter/manual/confirm, e2e no-hang/no-leak, CLI flag routing | ✅ Fresh Response per fetch mock; listModels errors typed |
+| 4.2 Prompter RED | `test/cli/prompter.test.ts` | Unit | N/A (new) | ✅ Module missing then assertion fails | ✅ 4/4 | ✅ isTty matrix, masked password, select+input, confirm default/no | ✅ Muted stdout writer for password |
+| 4.3 GREEN/REFACTOR | `src/app/setup-service.ts`, `src/cli/prompter.ts`, `src/app/config-service.ts`, `src/commands/config.ts` | App + CLI | ✅ Prior PR3 tests green | Driven by 4.1–4.2 | ✅ Focused 18/18 + full 348/348 | Covered design JSON shape + flags | ✅ `--json` forces `isTty:false`; exactOptionalPropertyTypes-safe option spreads |
 
 ## Work Unit Evidence
 
 | Evidence | Value |
 |---|---|
-| Focused test command and exact result | `npm test -- test/app/config-service-models.test.ts test/commands/config.test.ts test/app/config-doctor-library.test.ts` → 45/45 passed |
-| Runtime harness command/scenario and exact result | N/A for live network in apply — seams inject `fetchImpl`; live Ollama metadata already recorded in PR1/PR2. Optional local: `node dist/cli/program.js config models --json` after build with user config. |
-| Rollback boundary | Revert `src/app/config-service.ts`, `src/commands/config.ts`, `test/app/config-service-models.test.ts`, `test/commands/config.test.ts`, and this apply-progress/tasks marks. No schema migration. |
+| Focused test command and exact result | `npm test -- test/app/setup-service.test.ts test/cli/prompter.test.ts test/e2e/config-setup.test.ts test/commands/config-setup.test.ts` → **18/18 passed** |
+| Related regression | `npm test --` (setup + config models + discovery/hints + doctor library) → **85/85 passed** |
+| Runtime harness command/scenario and exact result | Non-TTY e2e via in-process `runCli` with stubbed `fetch` and isolated `APPDATA`/`XDG_CONFIG_HOME`: incomplete flags → exit 3 single JSON; full flags → persist user config + connectionTest ok; auth 401 → exit 4; no key on stdout/stderr. Live network not required in apply (seams inject `fetchImpl`). |
+| Rollback boundary | Revert `src/app/setup-service.ts`, `src/cli/prompter.ts`, `src/app/config-service.ts` (setup route only), `src/commands/config.ts` (setup flags), and the four new test files + this apply-progress/tasks marks. No schema migration. |
 
 ### Test Summary
 
-- **Total tests written**: 12 new (10 service + 2 command)
-- **Total tests passing**: 330 full suite
-- **Layers used**: Unit (service), Integration/command (CLI flags)
+- **Total tests written**: 18 new (10 setup-service + 4 prompter + 3 e2e + 1 command)
+- **Total tests passing**: 348 full suite
+- **Layers used**: Unit (setup-service, prompter), Integration/command (CLI flags), E2E (non-TTY setup)
 - **Approval tests** (refactoring): None — additive behavior
-- **Pure functions created**: 0 new modules; local helpers in config-service
+- **Pure functions created**: `isInteractiveTty`; setup helpers remain module-private
 
 ## Verification Evidence
 
 | Command | Result |
 |---------|--------|
-| Focused PR3 tests | 12/12 passed |
-| Config + discovery/hints safety | 67/67 passed (earlier batch) |
+| Focused PR4 tests | 18/18 passed |
+| Related config/discovery safety | 85/85 passed |
 | `npm run typecheck` | Passed |
 | `npm run lint` | Passed |
 | `npm run openspec:validate -- provider-setup-and-model-selection` | Passed |
-| `npm test` | 330/330 passed |
+| `npm test` | 348/348 passed |
 
 ## Status
 
-PR3 implementation complete. Ready for sdd-verify / review / commit (do not open PR unless requested).
+PR4 implementation complete. Ready for sdd-verify / review / commit (do not open PR unless requested).
+
+## Cumulative completed slices
+
+- PR1 typed errors/default — done
+- PR2 model discovery + vision hints — done
+- PR3 config models + key connection test — done
+- PR4 setup wizard — done (this slice)
+- PR5 doctor/docs/gates — pending
