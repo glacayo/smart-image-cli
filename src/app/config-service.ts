@@ -2,11 +2,27 @@ import path from "node:path";
 import { EXIT_CODES } from "../cli/exit-codes.js";
 import { errorResult, successResult } from "../cli/output.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
+import { ModelDiscoveryClient } from "../adapters/vision/model-discovery.js";
+import {
+  annotateModelsWithVisionHints,
+  describeVisionHint
+} from "../adapters/vision/vision-hints.js";
+import {
+  AuthProviderError,
+  EndpointNotFoundProviderError,
+  ModelNotFoundProviderError,
+  VisionProviderError
+} from "../adapters/vision/provider.js";
+import {
+  getVisionProviderPreset,
+  type VisionProviderId
+} from "../adapters/vision/presets.js";
 import {
   emptyProjectConfig,
   parseProjectConfig,
   type ProjectConfig
 } from "../config/project-config.js";
+import type { UserConfig } from "../config/user-config.js";
 import {
   readProjectConfig,
   readUserConfig,
@@ -17,6 +33,19 @@ import {
 } from "./runtime.js";
 
 const SECRET_KEY_NAME = /(api[-_]?key|authorization|bearer|token|secret|password|credential)/i;
+const API_KEY_SEGMENT = /^api[-_]?key$/i;
+const PROVIDER_IDS = new Set<VisionProviderId>(["ollama", "openrouter", "gemini"]);
+
+export type ConfigServiceOptions = {
+  project?: boolean;
+  root?: string;
+  userConfigPath?: string;
+  provider?: string;
+  endpoint?: string;
+  fetchImpl?: typeof fetch;
+  /** When provided, human-mode connection outcomes are written here. */
+  stderr?: NodeJS.WritableStream;
+};
 
 /**
  * Masks a value retrieved by a dotted key path. When the final key segment
@@ -64,7 +93,7 @@ export async function configService(
   action = "list",
   key: string | undefined,
   value: string | undefined,
-  options: { project?: boolean; root?: string; userConfigPath?: string } = {}
+  options: ConfigServiceOptions = {}
 ): Promise<ServiceOutcome> {
   const root = path.resolve(options.root ?? process.cwd());
   if (options.project === true) {
@@ -125,6 +154,11 @@ export async function configService(
 
   const userConfigPath = options.userConfigPath;
   const current = await readUserConfig(userConfigPath);
+
+  if (action === "models") {
+    return listProviderModels(current, options);
+  }
+
   if (action === "list")
     return {
       result: successResult("config", {
@@ -154,12 +188,18 @@ export async function configService(
         parseValue(value)
       );
       await writeUserConfig(next as never, userConfigPath);
+      const baseDetails = {
+        scope: "user" as const,
+        key,
+        value: maskByContext(key, getPath(next, key))
+      };
+
+      if (isApiKeyConfigKey(key)) {
+        return runApiKeyConnectionTest(next as UserConfig, key, baseDetails, options);
+      }
+
       return {
-        result: successResult("config", {
-          scope: "user",
-          key,
-          value: maskByContext(key, getPath(next, key))
-        }),
+        result: successResult("config", baseDetails),
         exitCode: EXIT_CODES.SUCCESS
       };
     } catch (error) {
@@ -167,6 +207,225 @@ export async function configService(
     }
   }
   return invalid();
+}
+
+async function listProviderModels(
+  current: UserConfig,
+  options: ConfigServiceOptions
+): Promise<ServiceOutcome> {
+  const resolved = resolveProviderTarget(current, options);
+  if ("error" in resolved) return resolved.error;
+
+  const { providerId, endpoint, apiKey } = resolved;
+  const client = new ModelDiscoveryClient({
+    providerId,
+    endpoint,
+    apiKey,
+    redactor: defaultSecretRedactor,
+    ...(options.fetchImpl !== undefined ? { fetchImpl: options.fetchImpl } : {})
+  });
+
+  try {
+    const listing = await client.listModels();
+    if (!listing.supported) {
+      return {
+        result: successResult("config", {
+          action: "models",
+          provider: providerId,
+          endpoint: defaultSecretRedactor.mask(endpoint),
+          source: "unavailable",
+          models: [],
+          reason: listing.reason,
+          fallback:
+            "Enter a model id manually (for example via config setup) when discovery is unavailable."
+        }),
+        exitCode: EXIT_CODES.SUCCESS
+      };
+    }
+
+    const models = annotateModelsWithVisionHints(providerId, listing.models);
+    const warnings = models
+      .filter((model) => model.vision !== true)
+      .map((model) => describeVisionHint(model));
+
+    return {
+      result: successResult("config", {
+        action: "models",
+        provider: providerId,
+        endpoint: defaultSecretRedactor.mask(endpoint),
+        source: "discovery",
+        models,
+        warnings
+      }),
+      exitCode: EXIT_CODES.SUCCESS
+    };
+  } catch (error) {
+    return providerFailure(error);
+  }
+}
+
+async function runApiKeyConnectionTest(
+  nextConfig: UserConfig,
+  key: string,
+  baseDetails: { scope: "user"; key: string; value: unknown },
+  options: ConfigServiceOptions
+): Promise<ServiceOutcome> {
+  const providerFromKey = providerIdFromApiKeyPath(key);
+  const providerOverride = options.provider ?? providerFromKey;
+  const resolved = resolveProviderTarget(nextConfig, {
+    ...(providerOverride !== undefined ? { provider: providerOverride } : {}),
+    ...(options.endpoint !== undefined ? { endpoint: options.endpoint } : {})
+  });
+  if ("error" in resolved) {
+    // Key already persisted; surface missing provider/key target as invalid_input.
+    return resolved.error;
+  }
+
+  const { providerId, endpoint, apiKey } = resolved;
+  const client = new ModelDiscoveryClient({
+    providerId,
+    endpoint,
+    apiKey,
+    redactor: defaultSecretRedactor,
+    ...(options.fetchImpl !== undefined ? { fetchImpl: options.fetchImpl } : {})
+  });
+
+  try {
+    await client.testConnection();
+    writeHumanConnectionOutcome(options.stderr, true, "Connection test succeeded.");
+    return {
+      result: successResult("config", {
+        ...baseDetails,
+        connectionTest: { ok: true }
+      }),
+      exitCode: EXIT_CODES.SUCCESS
+    };
+  } catch (error) {
+    const failure = providerFailure(error);
+    const reason = failure.result.reason ?? "provider_error";
+    const message = failure.result.message ?? "Connection test failed.";
+    writeHumanConnectionOutcome(options.stderr, false, message);
+    return {
+      result: errorResult("config", reason, message, {
+        ...baseDetails,
+        connectionTest: { ok: false, reason }
+      }),
+      exitCode: failure.exitCode
+    };
+  }
+}
+
+function writeHumanConnectionOutcome(
+  stderr: NodeJS.WritableStream | undefined,
+  ok: boolean,
+  message: string
+): void {
+  if (stderr === undefined) return;
+  const line = ok
+    ? `img config: connection test ok — ${message}\n`
+    : `img config: connection test failed — ${message}\n`;
+  stderr.write(line);
+}
+
+function resolveProviderTarget(
+  current: UserConfig,
+  options: Pick<ConfigServiceOptions, "provider" | "endpoint">
+):
+  | { providerId: VisionProviderId; endpoint: string; apiKey: string }
+  | { error: ServiceOutcome } {
+  const providerRaw = options.provider ?? current.activeProvider;
+  if (!isVisionProviderId(providerRaw)) {
+    return {
+      error: {
+        result: errorResult(
+          "config",
+          "invalid_input",
+          `Unknown provider "${providerRaw}". Expected ollama, openrouter, or gemini.`
+        ),
+        exitCode: EXIT_CODES.INVALID_INPUT
+      }
+    };
+  }
+
+  const providerId = providerRaw;
+  const preset = getVisionProviderPreset(providerId);
+  const providerConfig = current.providers[providerId];
+  const apiKey = providerConfig?.apiKey;
+  if (apiKey === undefined || apiKey.length === 0) {
+    return {
+      error: {
+        result: errorResult(
+          "config",
+          "invalid_input",
+          `Missing API key for provider "${providerId}". Set providers.${providerId}.apiKey or run config setup.`
+        ),
+        exitCode: EXIT_CODES.INVALID_INPUT
+      }
+    };
+  }
+
+  const endpoint = (options.endpoint ?? providerConfig?.endpoint ?? preset.endpoint).replace(
+    /\/+$/,
+    ""
+  );
+
+  return { providerId, endpoint, apiKey };
+}
+
+function isVisionProviderId(value: string): value is VisionProviderId {
+  return PROVIDER_IDS.has(value as VisionProviderId);
+}
+
+function isApiKeyConfigKey(dottedKey: string): boolean {
+  const last = dottedKey.split(".").at(-1) ?? "";
+  return API_KEY_SEGMENT.test(last);
+}
+
+function providerIdFromApiKeyPath(dottedKey: string): string | undefined {
+  const parts = dottedKey.split(".");
+  // providers.<id>.apiKey
+  if (parts.length >= 3 && parts[0] === "providers" && isVisionProviderId(parts[1]!)) {
+    return parts[1];
+  }
+  return undefined;
+}
+
+function providerFailure(error: unknown): ServiceOutcome {
+  const reason =
+    error instanceof AuthProviderError
+      ? "provider_auth"
+      : error instanceof ModelNotFoundProviderError
+        ? "model_not_found"
+        : error instanceof EndpointNotFoundProviderError
+          ? "endpoint_not_found"
+          : "provider_error";
+
+  const message =
+    error instanceof Error
+      ? defaultSecretRedactor.mask(error.message)
+      : defaultSecretRedactor.mask(String(error));
+
+  const details: Record<string, unknown> = {};
+  if (error instanceof VisionProviderError) {
+    details.kind = error.kind;
+    details.providerDetails = defaultSecretRedactor.maskValue(error.redactedDetails);
+  }
+  if (error instanceof ModelNotFoundProviderError) {
+    details.model = error.model;
+  }
+  if (error instanceof EndpointNotFoundProviderError) {
+    details.endpoint = defaultSecretRedactor.mask(error.endpoint);
+  }
+
+  return {
+    result: errorResult(
+      "config",
+      reason,
+      message,
+      Object.keys(details).length > 0 ? details : undefined
+    ),
+    exitCode: EXIT_CODES.PROVIDER_ERROR
+  };
 }
 
 function invalidKey(error: unknown): ServiceOutcome {
@@ -210,7 +469,7 @@ function invalid(): ServiceOutcome {
     result: errorResult(
       "config",
       "invalid_input",
-      "Expected config list|get <key>|set <key> <value>"
+      "Expected config list|get <key>|set <key> <value>|models"
     ),
     exitCode: EXIT_CODES.INVALID_INPUT
   };

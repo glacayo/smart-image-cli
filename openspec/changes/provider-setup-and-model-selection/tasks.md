@@ -39,8 +39,8 @@ Chain strategy: feature-branch-chain
 
 ## Phase 3: PR3 Config Models / Key Test
 
-- [ ] 3.1 RED: `config models --json` and API-key set tests for single JSON, fallback, stderr/JSON connection outcome, user-scope persistence, redaction.
-- [ ] 3.2 GREEN/REFACTOR: modify `src/app/config-service.ts` and `src/commands/config.ts` for `models`, key-test wiring, `--provider`, `--endpoint`.
+- [x] 3.1 RED: `config models --json` and API-key set tests for single JSON, fallback, stderr/JSON connection outcome, user-scope persistence, redaction.
+- [x] 3.2 GREEN/REFACTOR: modify `src/app/config-service.ts` and `src/commands/config.ts` for `models`, key-test wiring, `--provider`, `--endpoint`.
 
 ## Phase 4: PR4 Setup Wizard
 
