@@ -6,46 +6,63 @@
 
 ## Slice
 
-PR2 — model discovery and vision hints.
+PR3 — `config models` + API-key connection test.
 
 ## Mode
 
 Strict TDD.
 
+## Delivery
+
+- Strategy: auto-chain / feature-branch-chain
+- Branch: `feat/provider-config-models`
+- Base: merged PR2 on main
+- Review budget note: authored PR3 diff ≈ 680–700 lines (prod ~290 + focused tests ~390). Kept as one cohesive work unit (shared provider resolution + discovery client). Over 400-line budget; no clean sub-split without breaking the models/key-test contract. Reviewer may treat tests as secondary to `config-service.ts` / `config.ts` core.
+
 ## Scope
 
-- Add OpenAI-compatible model discovery for `/v1/models` metadata.
-- Normalize model list entries into stable provider-facing types.
-- Add curated and metadata-derived vision hint classification.
-- Keep command UX, setup wizard, doctor improvements, and beta cleanup outside PR2.
+- Add `config models` action listing provider models via `ModelDiscoveryClient`.
+- Annotate listings with vision hints; warn-not-block for unknown/non-vision.
+- Fallback messaging when discovery unsupported/unparseable (`source: "unavailable"`).
+- Wire API-key `config set` to connection test (GET `/models`); JSON `connectionTest` + human stderr outcome.
+- CLI flags: `--provider`, `--endpoint`.
+- Typed errors: `provider_auth`, `endpoint_not_found`, `model_not_found` → exit 4; no secret leakage.
+- Out of scope: PR4 setup wizard, PR5 doctor/docs/beta cleanup.
 
 ## TDD Cycle Evidence
 
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
 |------|-----------|-------|------------|-----|-------|-------------|----------|
-| 2.1 Discovery tests | `test/adapters/vision/model-discovery.test.ts` | Unit | Existing PR1 provider transport and typed-error tests | Missing `model-discovery` module failed imports | `ModelDiscoveryClient` and normalization passed focused tests | Covered success, auth/404 typed errors, malformed JSON, metadata shapes, and connection outcomes | Collapsed client outcomes into stable union helpers |
-| 2.1 Vision hint tests | `test/adapters/vision/vision-hints.test.ts` | Unit | New isolated pure-helper surface | Missing `vision-hints` module failed imports | Curated hints and metadata hint resolution passed focused tests | Covered explicit true/false/null modality metadata, curated Ollama/OpenAI-compatible IDs, unknown models, and warn-not-block behavior | Kept hints as pure functions with provider-aware inputs |
-| 2.2 Production implementation | `src/adapters/vision/model-discovery.ts`, `src/adapters/vision/vision-hints.ts` | Unit-backed adapter/domain helpers | Focused discovery/hints tests plus existing provider safety tests | Failing imports and behavior expectations from RED tests | Focused discovery + hints tests passed 22/22 | Adapter safety tests passed with existing provider transport/presets coverage | Kept PR2 limited to discovery/hints; no PR3+ CLI UX added |
+| 3.1 Models/key-set RED | `test/app/config-service-models.test.ts`, `test/commands/config.test.ts` | Unit + command integration | ✅ 33/33 `config-doctor-library` | ✅ 10 failing before impl | ✅ 12/12 after GREEN | ✅ discovery success, unavailable fallback, auth, endpoint 404, provider/endpoint overrides, missing key, key-set ok/fail/stderr/non-apiKey, CLI flag routing | ✅ Compacted helpers + `providerFailure` |
+| 3.2 GREEN/REFACTOR | `src/app/config-service.ts`, `src/commands/config.ts` | App + CLI | ✅ Existing config tests still green | Driven by 3.1 | ✅ Focused + full suite | Covered design JSON shapes | ✅ exactOptionalPropertyTypes-safe option spreads |
+
+## Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `npm test -- test/app/config-service-models.test.ts test/commands/config.test.ts test/app/config-doctor-library.test.ts` → 45/45 passed |
+| Runtime harness command/scenario and exact result | N/A for live network in apply — seams inject `fetchImpl`; live Ollama metadata already recorded in PR1/PR2. Optional local: `node dist/cli/program.js config models --json` after build with user config. |
+| Rollback boundary | Revert `src/app/config-service.ts`, `src/commands/config.ts`, `test/app/config-service-models.test.ts`, `test/commands/config.test.ts`, and this apply-progress/tasks marks. No schema migration. |
+
+### Test Summary
+
+- **Total tests written**: 12 new (10 service + 2 command)
+- **Total tests passing**: 330 full suite
+- **Layers used**: Unit (service), Integration/command (CLI flags)
+- **Approval tests** (refactoring): None — additive behavior
+- **Pure functions created**: 0 new modules; local helpers in config-service
 
 ## Verification Evidence
 
 | Command | Result |
 |---------|--------|
-| `npm test -- test/adapters/vision/model-discovery.test.ts test/adapters/vision/vision-hints.test.ts` | 22/22 passed during apply and verify |
-| Provider adapter safety tests | Passed during apply and verify |
-| `npm run typecheck` | Passed during apply and verify |
-| `npm run lint` | Passed during apply and verify |
-| `npm run openspec:validate -- provider-setup-and-model-selection` | Passed during apply and verify |
-| `npm test` | 318/318 passed during apply and verify |
-
-## Live Metadata Observation
-
-- `GET https://ollama.com/v1/models` returned HTTP 200 with 19 models.
-- `minimax-m3` was present.
-- `llama3.2-vision` was absent.
-- Model entries exposed `id`, `object`, `created`, and `owned_by`, but no modality/capability fields.
-- Therefore PR2 keeps curated provider hints as required fallback evidence when endpoint metadata is incomplete.
+| Focused PR3 tests | 12/12 passed |
+| Config + discovery/hints safety | 67/67 passed (earlier batch) |
+| `npm run typecheck` | Passed |
+| `npm run lint` | Passed |
+| `npm run openspec:validate -- provider-setup-and-model-selection` | Passed |
+| `npm test` | 330/330 passed |
 
 ## Status
 
-PR2 implementation is ready for verification after persisting this Strict TDD evidence artifact.
+PR3 implementation complete. Ready for sdd-verify / review / commit (do not open PR unless requested).
