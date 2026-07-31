@@ -44,6 +44,17 @@ type UniqueAnalysis = {
   cacheHit: boolean;
 };
 
+const DEFAULT_ANALYZE_IGNORED_DIRS = [
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "coverage",
+  ".next",
+  ".nuxt",
+  "vendor"
+] as const;
+
 export async function analyzeService(
   rootInput: string,
   options: AnalyzeOptions,
@@ -232,7 +243,10 @@ async function uniqueDestination(
 
 async function* walkImages(root: string): AsyncGenerator<string> {
   const config = await readProjectConfig(root);
-  const ignored = generatedDirsForRoot(root, config.outputDirs);
+  const ignored = generatedDirsForRoot(root, [
+    ...config.outputDirs,
+    ...DEFAULT_ANALYZE_IGNORED_DIRS
+  ]);
   const guard = new StorageRootGuard(root);
   const visited = new Set<string>();
 

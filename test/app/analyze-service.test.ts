@@ -131,9 +131,7 @@ describe("analyzeService", () => {
       }
     }
     if (!symlinkCreated) {
-      console.warn(
-        "SKIP: bad-entry traversal test — OS denied symlink creation on this platform"
-      );
+      console.warn("SKIP: bad-entry traversal test — OS denied symlink creation on this platform");
       return;
     }
 
@@ -156,6 +154,33 @@ describe("analyzeService", () => {
     // At least one bad entry must have been skipped — proving the walk
     // encountered and survived the bad symlink rather than aborting.
     expect(details.skipped.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("ignores dependency and build directories during recursive analysis", async () => {
+    const root = await tempRoot();
+    await fs.writeFile(path.join(root, "good.jpg"), "good-bytes");
+    await fs.mkdir(path.join(root, "node_modules", "pkg"), { recursive: true });
+    await fs.mkdir(path.join(root, "dist", "assets"), { recursive: true });
+    await fs.mkdir(path.join(root, ".git", "objects"), { recursive: true });
+    await fs.writeFile(path.join(root, "node_modules", "pkg", "logo.png"), "node-module-logo");
+    await fs.writeFile(path.join(root, "dist", "assets", "bundle-logo.png"), "dist-logo");
+    await fs.writeFile(path.join(root, ".git", "objects", "object.jpg"), "git-object");
+    const provider = fakeProvider();
+
+    const outcome = await analyzeService(
+      root,
+      { dryRun: true },
+      { provider, image: fakeImage(), taxonomy }
+    );
+
+    const details = outcome.result.details as {
+      planned: Array<{ from: string }>;
+      skipped: Array<unknown>;
+    };
+    expect(outcome.result.ok).toBe(true);
+    expect(provider.calls).toBe(1);
+    expect(details.planned.map((item) => item.from)).toEqual(["good.jpg"]);
+    expect(details.skipped).toEqual([]);
   });
 });
 
