@@ -4,13 +4,15 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setupService } from "../../src/app/setup-service.js";
 import type { Prompter } from "../../src/cli/prompter.js";
-import { readUserConfig } from "../../src/app/runtime.js";
+import { readUserConfig, resolveProviderConfig } from "../../src/app/runtime.js";
+import { getUserConfigPath } from "../../src/config/user-config.js";
 
 const roots: string[] = [];
 const apiKey = ["sk", "test", "setupwizard123456789012345"].join("-");
 const badKey = ["sk", "bad", "setupkey999999999999999999"].join("-");
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(roots.map((root) => fs.rm(root, { recursive: true, force: true })));
   roots.length = 0;
 });
@@ -331,5 +333,40 @@ describe("setupService interactive (TTY) seams", () => {
     const details = outcome.result.details as { warnings?: string[]; model: string };
     expect(details.model).toBe("glm-5.2");
     expect(details.warnings?.length).toBeGreaterThan(0);
+  });
+});
+
+describe("setupService → analyze provider resolution", () => {
+  it("persists selection that resolveProviderConfig reuses for subsequent analyze wiring", async () => {
+    const configHome = await fs.mkdtemp(path.join(os.tmpdir(), "smart-image-setup-resolve-"));
+    roots.push(configHome);
+    vi.stubEnv("APPDATA", configHome);
+    vi.stubEnv("XDG_CONFIG_HOME", configHome);
+
+    const userConfigPath = getUserConfigPath();
+    await fs.mkdir(path.dirname(userConfigPath), { recursive: true });
+
+    const fetchImpl = fetchOk({ data: [{ id: "minimax-m3" }, { id: "glm-5.2" }] });
+    const setup = await setupService({
+      isTty: false,
+      provider: "ollama",
+      apiKey,
+      model: "minimax-m3",
+      endpoint: "https://setup-reuse.test/v1",
+      userConfigPath,
+      fetchImpl
+    });
+    expect(setup.exitCode).toBe(0);
+
+    const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "smart-image-setup-project-"));
+    roots.push(projectRoot);
+
+    const resolved = await resolveProviderConfig(projectRoot);
+    expect(resolved).toMatchObject({
+      id: "ollama",
+      endpoint: "https://setup-reuse.test/v1",
+      model: "minimax-m3",
+      apiKey
+    });
   });
 });

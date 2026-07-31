@@ -50,12 +50,12 @@ Chain strategy: feature-branch-chain
 
 ## Phase 5: PR5 Doctor / Final Gates
 
-- [ ] 5.1 RED: doctor tests for active provider, endpoint/model reachability, unreachable model → `config setup`, redaction.
-- [ ] 5.2 GREEN/REFACTOR: modify `src/app/doctor-service.ts` and `README.md` with setup/model/doctor guidance.
-- [ ] 5.3 Verify gates: `npm run openspec:validate -- provider-setup-and-model-selection`, `npm run typecheck`, `npm test`, `npm run lint`, `npm run build`, `npm run format`.
-- [ ] 5.4 Before beta 2 controlled testing, clean/uninstall current beta from `C:\laragon\www\test-img-ia-analyzer-resizermain` to avoid stale artifact confusion.
+- [x] 5.1 RED: doctor tests for active provider, endpoint/model reachability, unreachable model → `config setup`, redaction.
+- [x] 5.2 GREEN/REFACTOR: modify `src/app/doctor-service.ts` and `README.md` with setup/model/doctor guidance.
+- [x] 5.3 Verify gates: `npm run openspec:validate -- provider-setup-and-model-selection`, `npm run typecheck`, `npm test`, `npm run lint`, `npm run build`, `npm run format`.
+- [x] 5.4 Before beta 2 controlled testing, clean/uninstall current beta from `C:\laragon\www\test-img-ia-analyzer-resizermain` to avoid stale artifact confusion.
 
 ## Done Criteria
 
-- [ ] All spec scenarios pass; threat matrix `N/A` has no omitted applicable RED case.
-- [ ] No stdout/stderr/log/project file leaks API keys; live Ollama evidence names model ids only.
+- [x] All spec scenarios pass; threat matrix `N/A` has no omitted applicable RED case.
+- [x] No stdout/stderr/log/project file leaks API keys; live Ollama evidence names model ids only.
