@@ -8,10 +8,10 @@ Use these instructions as the project-level rules of the house. For detailed ope
 smart-image-cli
 ```
 
-The skill lives at:
+The portable skill lives at:
 
 ```text
-.opencode/skills/smart-image-cli/SKILL.md
+.agents/skills/smart-image-cli/SKILL.md
 ```
 
 ## Core rules
@@ -38,7 +38,7 @@ The skill lives at:
 Example preferred root:
 
 ```bash
-img analyze "C:/laragon/www/test-img-ia-analyzer-resizermain/CUSTOMER-IMAGES"
+img analyze "./CUSTOMER-IMAGES"
 ```
 
 ## Verification expectations

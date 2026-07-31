@@ -4,7 +4,7 @@
   "description": "Agent-friendly CLI for analyzing, organizing, and preparing website image assets.",
   "type": "module",
   "bin": {
-    "img": "./dist/cli/program.js"
+    "img": "dist/cli/program.js"
   },
   "files": [
     "assets",

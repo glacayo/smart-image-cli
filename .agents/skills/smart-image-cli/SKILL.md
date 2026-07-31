@@ -75,13 +75,13 @@ Use the most specific folder that contains the images you want the tool to manag
 Good:
 
 ```bash
-img analyze "C:/laragon/www/test-img-ia-analyzer-resizermain/CUSTOMER-IMAGES"
+img analyze "./CUSTOMER-IMAGES"
 ```
 
 Riskier:
 
 ```bash
-img analyze "C:/laragon/www/test-img-ia-analyzer-resizermain"
+img analyze "."
 ```
 
 The broader root can include unrelated website files. The CLI ignores common dependency/build folders by default, but the agent should still choose the smallest correct root. Good root selection is not optional housekeeping; it controls what images become part of the library.
