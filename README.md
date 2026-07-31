@@ -10,13 +10,14 @@ Smart Image CLI is designed for developers and AI coding agents that need to wor
 
 | Area | Status |
 | --- | --- |
-| SDD artifacts | Ready for archive after final verification |
+| SDD artifacts | Provider setup/model selection archived; beta 2 prep in progress |
 | Foundation and domain policies | Implemented |
 | CLI shell and commands | Implemented |
 | Storage/adapters | Implemented: SQLite index, JSON sidecars, guarded storage root, ExifTool metadata, Sharp processing |
 | Application services | Implemented: analyze, config, doctor, library, optimize, pick, and runtime provider wiring |
 | AI/provider adapters | Implemented: OpenAI-compatible image analysis plus local and AI text ranking providers |
 | Semantic pick query | Implemented and verified for local default ranking, explicit metadata-only AI ranking, bounded `topK`, structured ranking output, and loud AI failure handling |
+| Provider onboarding | Implemented: guided setup, model discovery, vision hints, API-key connection tests, and doctor diagnostics |
 
 ## What it will do
 
