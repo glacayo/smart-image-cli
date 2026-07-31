@@ -29,11 +29,14 @@ describe("doctorService provider reachability (PR5)", () => {
       }
     });
 
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse({
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/api/chat") && init?.method === "POST") {
+        return jsonResponse({ choices: [{ message: { content: "OK" } }] });
+      }
+      return jsonResponse({
         data: [{ id: "minimax-m3" }, { id: "glm-5.2" }]
-      })
-    );
+      });
+    });
 
     const outcome = await doctorService(
       { root },
@@ -52,6 +55,7 @@ describe("doctorService provider reachability (PR5)", () => {
     expect(names).toContain("provider-config");
     expect(names).toContain("provider-endpoint");
     expect(names).toContain("provider-model");
+    expect(names).toContain("provider-chat");
     expect(names).not.toContain("provider-ping");
 
     const configCheck = checks.find((c) => c.name === "provider-config")!;
@@ -67,7 +71,59 @@ describe("doctorService provider reachability (PR5)", () => {
 
     expect(checks.find((c) => c.name === "provider-endpoint")!.ok).toBe(true);
     expect(checks.find((c) => c.name === "provider-model")!.ok).toBe(true);
-    expect(fetchImpl).toHaveBeenCalled();
+    expect(checks.find((c) => c.name === "provider-chat")!.ok).toBe(true);
+    expect(checks.find((c) => c.name === "provider-chat")!.details).toMatchObject({
+      route: "POST /api/chat"
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("fails provider-chat when model discovery succeeds but chat completions auth fails", async () => {
+    const root = await tempRoot();
+    const userConfigPath = await writeUserConfig({
+      activeProvider: "ollama",
+      providers: {
+        ollama: {
+          provider: "ollama",
+          endpoint: "https://doctor.example/v1",
+          model: "minimax-m3",
+          apiKey: secretKey
+        }
+      }
+    });
+
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/api/chat") && init?.method === "POST") {
+        return jsonResponse({ error: { message: `invalid key ${secretKey}` } }, 401);
+      }
+      return jsonResponse({ data: [{ id: "minimax-m3" }] });
+    });
+
+    const outcome = await doctorService(
+      { root },
+      {
+        exiftoolProbe: async () => undefined,
+        fetchImpl,
+        userConfigPath
+      }
+    );
+
+    expect(outcome.exitCode).toBe(5);
+    expect(outcome.result.status).toBe("failed");
+
+    const checks = getChecks(outcome);
+    expect(checks.find((c) => c.name === "provider-endpoint")?.ok).toBe(true);
+    expect(checks.find((c) => c.name === "provider-model")?.ok).toBe(true);
+
+    const chatCheck = checks.find((c) => c.name === "provider-chat")!;
+    expect(chatCheck.ok).toBe(false);
+    expect(chatCheck.details).toMatchObject({ route: "POST /api/chat" });
+    expect(chatCheck.message).toMatch(/ollama chat|chat/i);
+    expect(chatCheck.message).toMatch(/inference|list models/i);
+
+    const json = JSON.stringify(outcome.result);
+    expect(json).not.toContain(secretKey);
+    expect(json).toContain("[REDACTED]");
   });
 
   it("fails provider-model with actionable config setup guidance when model is missing from listing", async () => {
@@ -262,9 +318,11 @@ function getChecks(outcome: {
   result: { details?: unknown };
 }): Array<{ name: string; ok: boolean; message?: string; details?: unknown }> {
   return (
-    (outcome.result.details as {
-      checks?: Array<{ name: string; ok: boolean; message?: string; details?: unknown }>;
-    })?.checks ?? []
+    (
+      outcome.result.details as {
+        checks?: Array<{ name: string; ok: boolean; message?: string; details?: unknown }>;
+      }
+    )?.checks ?? []
   );
 }
 

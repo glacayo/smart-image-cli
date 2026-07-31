@@ -5,7 +5,9 @@ import { exiftool } from "exiftool-vendored";
 import { EXIT_CODES } from "../cli/exit-codes.js";
 import { errorResult, successResult } from "../cli/output.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
+import { probeOllamaChat, resolveOllamaApiEndpoint } from "../adapters/vision/ollama-cloud.js";
 import { ModelDiscoveryClient } from "../adapters/vision/model-discovery.js";
+import { postChatCompletion } from "../adapters/vision/openai-compat-transport.js";
 import { getVisionProviderPreset, type VisionProviderId } from "../adapters/vision/presets.js";
 import {
   AuthProviderError,
@@ -128,6 +130,7 @@ export async function doctorService(
       });
 
       let endpointOk = false;
+      let modelOk = false;
       try {
         await client.testConnection();
         endpointOk = true;
@@ -166,6 +169,7 @@ export async function doctorService(
           } else {
             const ids = new Set(listing.models.map((m) => m.id));
             if (ids.has(model)) {
+              modelOk = true;
               checks.push({
                 name: "provider-model",
                 ok: true,
@@ -196,6 +200,39 @@ export async function doctorService(
           details: { endpoint: maskedEndpoint, model }
         });
       }
+
+      if (endpointOk && modelOk) {
+        try {
+          await probeProviderChatCompletion({
+            providerId: activeProvider,
+            endpoint,
+            apiKey: active.apiKey,
+            model,
+            ...(deps.fetchImpl !== undefined ? { fetchImpl: deps.fetchImpl } : {})
+          });
+          checks.push({
+            name: "provider-chat",
+            ok: true,
+            details: providerChatDetails(activeProvider, endpoint, maskedEndpoint, model)
+          });
+        } catch (error) {
+          checks.push({
+            name: "provider-chat",
+            ok: false,
+            message: providerChatMessage(error),
+            details: {
+              ...providerChatDetails(activeProvider, endpoint, maskedEndpoint, model),
+              model,
+              ...(error instanceof VisionProviderError
+                ? {
+                    kind: error.kind,
+                    providerDetails: defaultSecretRedactor.maskValue(error.redactedDetails)
+                  }
+                : {})
+            }
+          });
+        }
+      }
     }
   } catch (error) {
     checks.push({ name: "provider-config", ok: false, message: message(error) });
@@ -222,6 +259,62 @@ async function probeExiftool(): Promise<void> {
   await exiftool.version();
 }
 
+async function probeProviderChatCompletion(options: {
+  providerId: VisionProviderId;
+  endpoint: string;
+  apiKey: string;
+  model: string;
+  fetchImpl?: typeof fetch;
+}): Promise<void> {
+  if (options.providerId === "ollama") {
+    await probeOllamaChat({
+      endpoint: options.endpoint,
+      apiKey: options.apiKey,
+      model: options.model,
+      ...(options.fetchImpl !== undefined ? { fetchImpl: options.fetchImpl } : {}),
+      redactor: defaultSecretRedactor
+    });
+    return;
+  }
+
+  await postChatCompletion({
+    endpoint: options.endpoint,
+    apiKey: options.apiKey,
+    model: options.model,
+    body: {
+      model: options.model,
+      max_tokens: 1,
+      messages: [{ role: "user", content: "Reply with OK." }]
+    },
+    timeoutMs: 15_000,
+    fetchImpl: options.fetchImpl ?? fetch,
+    redactor: defaultSecretRedactor,
+    rateLimitMessage: "Provider chat completions rate limit",
+    httpErrorMessage: (status) =>
+      `Provider chat completions returned HTTP ${status}. The configured provider must support OpenAI-compatible POST /chat/completions before analyze can run.`,
+    nonJsonMessage: "Provider chat completions returned non-JSON response",
+    requestFailedMessage: "Provider chat completions request failed",
+    authErrorMessage:
+      "Provider chat completions authentication failed. The API key can list models but cannot run inference; verify chat/inference permissions or run `img config setup`."
+  });
+}
+
+function providerChatDetails(
+  providerId: VisionProviderId,
+  endpoint: string,
+  maskedEndpoint: string,
+  model: string
+): { endpoint: string; model: string; route: string } {
+  if (providerId === "ollama") {
+    return {
+      endpoint: defaultSecretRedactor.mask(resolveOllamaApiEndpoint(endpoint)),
+      model,
+      route: "POST /api/chat"
+    };
+  }
+  return { endpoint: maskedEndpoint, model, route: "POST /chat/completions" };
+}
+
 function providerEndpointMessage(error: unknown): string {
   if (error instanceof AuthProviderError) {
     return message(error);
@@ -230,6 +323,14 @@ function providerEndpointMessage(error: unknown): string {
     return message(error);
   }
   return message(error);
+}
+
+function providerChatMessage(error: unknown): string {
+  const base = message(error).replace(/[.\s]+$/, "");
+  return (
+    `${base}. ` +
+    "`doctor` now checks the same chat completions route used by `analyze`, not only metadata model listing."
+  );
 }
 
 function message(error: unknown): string {

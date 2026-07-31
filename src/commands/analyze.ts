@@ -3,7 +3,9 @@ import { EXIT_CODES } from "../cli/exit-codes.js";
 import { emitResult } from "../cli/output.js";
 import { analyzeService } from "../app/analyze-service.js";
 import { loadTaxonomy, resolveProviderConfig, serviceError } from "../app/runtime.js";
+import { OllamaCloudVisionProvider } from "../adapters/vision/ollama-cloud.js";
 import { OpenAICompatVisionProvider } from "../adapters/vision/openai-compat.js";
+import type { VisionProvider } from "../adapters/vision/provider.js";
 
 export function registerAnalyzeCommand(program: Command): void {
   program
@@ -31,8 +33,16 @@ export function registerAnalyzeCommand(program: Command): void {
     );
 }
 
-async function buildProvider(root: string): Promise<OpenAICompatVisionProvider> {
+async function buildProvider(root: string): Promise<VisionProvider> {
   const provider = await resolveProviderConfig(root);
+  if (provider.id === "ollama") {
+    return new OllamaCloudVisionProvider({
+      id: provider.id,
+      endpoint: provider.endpoint,
+      model: provider.model,
+      apiKey: provider.apiKey
+    });
+  }
   return new OpenAICompatVisionProvider({
     id: provider.id,
     endpoint: provider.endpoint,

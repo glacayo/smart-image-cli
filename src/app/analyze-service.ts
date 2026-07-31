@@ -183,12 +183,25 @@ async function getUniqueAnalysis(
     const analysis = await deps.provider.analyze({
       imageBytes,
       mimeType: mimeTypeFor(filePath),
-      prompt: `Classify this image. Existing path: ${relPath}`
+      prompt: buildImageAnalysisPrompt(relPath, deps.taxonomy)
     });
     return { analysis, dims, model: deps.provider.id, cacheHit: false };
   })();
   cache.set(sha256, promise);
   return promise;
+}
+
+function buildImageAnalysisPrompt(relPath: string, taxonomy: Taxonomy): string {
+  const categoryIds = taxonomy.categories.map((category) => category.id).join(", ");
+  return [
+    "Classify this image for a website image library.",
+    `Existing path: ${relPath}`,
+    "Return only valid JSON. Do not wrap it in markdown. Do not include commentary.",
+    "The JSON object must match this exact schema:",
+    '{"subject":"string","categories":["category-id"],"orientation":"landscape|portrait|square|panorama","altText":"string","title":"string","description":"string","suggestedSlug":"lowercase-kebab-case"}',
+    `Allowed category ids: ${categoryIds}`,
+    "Use one or more allowed category ids only. If no category fits, use uncategorized."
+  ].join("\n");
 }
 
 async function uniqueDestination(

@@ -8,16 +8,16 @@ Smart Image CLI is designed for developers and AI coding agents that need to wor
 
 ## Current status
 
-| Area | Status |
-| --- | --- |
-| SDD artifacts | Provider setup/model selection archived; beta 2 prep in progress |
-| Foundation and domain policies | Implemented |
-| CLI shell and commands | Implemented |
-| Storage/adapters | Implemented: SQLite index, JSON sidecars, guarded storage root, ExifTool metadata, Sharp processing |
-| Application services | Implemented: analyze, config, doctor, library, optimize, pick, and runtime provider wiring |
-| AI/provider adapters | Implemented: OpenAI-compatible image analysis plus local and AI text ranking providers |
-| Semantic pick query | Implemented and verified for local default ranking, explicit metadata-only AI ranking, bounded `topK`, structured ranking output, and loud AI failure handling |
-| Provider onboarding | Implemented: guided setup, model discovery, vision hints, API-key connection tests, and doctor diagnostics |
+| Area                           | Status                                                                                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SDD artifacts                  | Provider setup/model selection archived; beta 2 prep in progress                                                                                               |
+| Foundation and domain policies | Implemented                                                                                                                                                    |
+| CLI shell and commands         | Implemented                                                                                                                                                    |
+| Storage/adapters               | Implemented: SQLite index, JSON sidecars, guarded storage root, ExifTool metadata, Sharp processing                                                            |
+| Application services           | Implemented: analyze, config, doctor, library, optimize, pick, and runtime provider wiring                                                                     |
+| AI/provider adapters           | Implemented: OpenAI-compatible image analysis plus local and AI text ranking providers                                                                         |
+| Semantic pick query            | Implemented and verified for local default ranking, explicit metadata-only AI ranking, bounded `topK`, structured ranking output, and loud AI failure handling |
+| Provider onboarding            | Implemented: guided setup, model discovery, vision hints, API-key connection tests, and doctor diagnostics                                                     |
 
 ## What it will do
 
@@ -37,22 +37,23 @@ Configure a vision provider once in **user-scoped** config (never commit API key
 # Interactive (TTY): provider → API key → connection test → model list → save
 img config setup
 
-# Non-interactive / agents (no prompts; requires flags)
-img --json config setup --provider ollama --api-key "$OLLAMA_API_KEY" --model minimax-m3
+# Non-interactive / agents (no prompts; pass flags before the setup action)
+img --json config --provider ollama --api-key "$OLLAMA_API_KEY" --model minimax-m3 setup
 
 # List discoverable models (metadata-only GET /models; no image spend)
 img --json config models --provider ollama
 
-# Diagnostics: runtime deps + active provider endpoint/model reachability
+# Diagnostics: runtime deps + active provider endpoint/model/chat reachability
 img --json doctor
 ```
 
 Notes:
 
-- Supported providers: `ollama`, `openrouter`, `gemini` (OpenAI-compatible endpoints).
+- Provider presets exist for `ollama`, `openrouter`, and `gemini`, but a provider should only be treated as usable after `doctor` passes and a real `analyze` flow succeeds. Listing models alone is not enough.
+- Ollama is the first provider targeted for end-to-end validation in this beta line. The CLI uses Ollama's native `POST /api/chat` route for image analysis; an API key must be able to run inference, not only list models. Do not promise the same guarantee for OpenRouter or Gemini until they have the same install → configure → analyze test evidence.
 - Optional flags: `--endpoint`, `--yes` (accept non-vision model warnings without confirm).
 - `config set` of an API key triggers a connection test; keys are redacted in all CLI output.
-- `doctor` reports `provider-config`, `provider-endpoint`, and `provider-model`. An unavailable model fails with guidance to run `img config setup`.
+- `doctor` reports `provider-config`, `provider-endpoint`, `provider-model`, and `provider-chat`. The chat check uses the same OpenAI-compatible `POST /chat/completions` route that `analyze` depends on, so it can catch keys that list models but cannot run inference.
 - Subsequent `analyze` / AI `pick` reuse the persisted user selection automatically.
 
 ## Picking images with semantic intent
@@ -73,15 +74,15 @@ img --json pick ./assets --category bathroom --query "bright shower" --semantic 
 
 ## Planned stack
 
-| Concern | Choice |
-| --- | --- |
-| Runtime | Node.js 22+ |
-| Language | TypeScript / ESM |
-| CLI | Commander |
-| Image processing | Sharp |
-| Metadata | exiftool-vendored |
-| Local index | SQLite + JSON sidecars |
-| Testing | Vitest |
+| Concern          | Choice                 |
+| ---------------- | ---------------------- |
+| Runtime          | Node.js 22+            |
+| Language         | TypeScript / ESM       |
+| CLI              | Commander              |
+| Image processing | Sharp                  |
+| Metadata         | exiftool-vendored      |
+| Local index      | SQLite + JSON sidecars |
+| Testing          | Vitest                 |
 
 ## Development
 
