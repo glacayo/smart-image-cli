@@ -28,6 +28,32 @@ Smart Image CLI is designed for developers and AI coding agents that need to wor
 - Select the best available image for a requested section.
 - Track where images were used so agents avoid repeating assets in the same slot.
 
+## Provider setup and model selection
+
+Configure a vision provider once in **user-scoped** config (never commit API keys to the project):
+
+```bash
+# Interactive (TTY): provider → API key → connection test → model list → save
+img config setup
+
+# Non-interactive / agents (no prompts; requires flags)
+img --json config setup --provider ollama --api-key "$OLLAMA_API_KEY" --model minimax-m3
+
+# List discoverable models (metadata-only GET /models; no image spend)
+img --json config models --provider ollama
+
+# Diagnostics: runtime deps + active provider endpoint/model reachability
+img --json doctor
+```
+
+Notes:
+
+- Supported providers: `ollama`, `openrouter`, `gemini` (OpenAI-compatible endpoints).
+- Optional flags: `--endpoint`, `--yes` (accept non-vision model warnings without confirm).
+- `config set` of an API key triggers a connection test; keys are redacted in all CLI output.
+- `doctor` reports `provider-config`, `provider-endpoint`, and `provider-model`. An unavailable model fails with guidance to run `img config setup`.
+- Subsequent `analyze` / AI `pick` reuse the persisted user selection automatically.
+
 ## Picking images with semantic intent
 
 `img pick` can select from the existing local index with structured constraints and, when `--query` is present, rank only the constraint-eligible candidates by metadata.

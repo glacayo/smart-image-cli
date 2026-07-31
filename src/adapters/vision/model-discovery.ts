@@ -16,8 +16,7 @@ export type DiscoveredModel = {
 };
 
 export type ListModelsResult =
-  | { supported: true; models: DiscoveredModel[] }
-  | { supported: false; reason: string };
+  { supported: true; models: DiscoveredModel[] } | { supported: false; reason: string };
 
 export type ModelDiscoveryClientOptions = {
   providerId: VisionProviderId;
@@ -29,8 +28,7 @@ export type ModelDiscoveryClientOptions = {
 };
 
 type FetchModelsOutcome =
-  | { ok: true; body: unknown }
-  | { ok: false; kind: "non_json"; bodyText: string };
+  { ok: true; body: unknown } | { ok: false; kind: "non_json"; bodyText: string };
 
 /**
  * OpenAI-compatible GET `{endpoint}/models` discovery client.
@@ -101,11 +99,9 @@ export class ModelDiscoveryClient {
           cause: error
         });
       }
-      throw new MalformedOutputProviderError(
-        "Model discovery request failed",
-        this.redact(error),
-        { cause: error }
-      );
+      throw new MalformedOutputProviderError("Model discovery request failed", this.redact(error), {
+        cause: error
+      });
     } finally {
       clearTimeout(timeout);
     }

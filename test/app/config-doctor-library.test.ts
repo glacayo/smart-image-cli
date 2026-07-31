@@ -165,6 +165,7 @@ describe("configService", () => {
         openrouter: {
           provider: "openrouter",
           endpoint: "https://user:pass@host.com",
+          model: "openai/gpt-4o-mini",
           apiKey: "test-key"
         }
       }
@@ -205,6 +206,7 @@ describe("configService", () => {
         gemini: {
           provider: "gemini",
           endpoint: "https://host.com?api_key=x",
+          model: "gemini-2.0-flash",
           apiKey: "test-key"
         }
       }
@@ -276,20 +278,32 @@ describe("configService", () => {
   });
 });
 
+function healthyDiscoveryFetch(modelId = "minimax-m3"): typeof fetch {
+  return (async () =>
+    new Response(JSON.stringify({ data: [{ id: modelId }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    })) as typeof fetch;
+}
+
 describe("doctorService", () => {
   it("reports success with sharp, sqlite, exiftool, and project-config checks when healthy", async () => {
     const root = await tempRoot();
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "ollama",
       providers: {
-        ollama: { provider: "ollama", apiKey: "test-key-for-doctor-healthy" }
+        ollama: {
+          provider: "ollama",
+          model: "minimax-m3",
+          apiKey: "test-key-for-doctor-healthy"
+        }
       }
     });
     const outcome = await doctorService(
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch(),
         userConfigPath
       }
     );
@@ -303,14 +317,15 @@ describe("doctorService", () => {
     expect(names).toContain("exiftool");
     expect(names).toContain("project-config");
     expect(names).toContain("provider-config");
-    expect(names).toContain("provider-ping");
+    expect(names).toContain("provider-endpoint");
+    expect(names).toContain("provider-model");
   });
 
   it("reports exiftool readiness failure when the probe rejects", async () => {
     const root = await tempRoot();
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "ollama",
-      providers: { ollama: { provider: "ollama", apiKey: "test-key" } }
+      providers: { ollama: { provider: "ollama", model: "minimax-m3", apiKey: "test-key" } }
     });
     const outcome = await doctorService(
       { root },
@@ -318,7 +333,7 @@ describe("doctorService", () => {
         exiftoolProbe: async () => {
           throw new Error("ExifTool binary not found");
         },
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch(),
         userConfigPath
       }
     );
@@ -333,19 +348,19 @@ describe("doctorService", () => {
     expect(exiftoolCheck.message).toContain("ExifTool");
   });
 
-  it("reports provider-ping failure when the ping seam rejects", async () => {
+  it("reports provider-endpoint failure when discovery connection fails", async () => {
     const root = await tempRoot();
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "ollama",
-      providers: { ollama: { provider: "ollama", apiKey: "test-key" } }
+      providers: { ollama: { provider: "ollama", model: "minimax-m3", apiKey: "test-key" } }
     });
     const outcome = await doctorService(
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => {
+        fetchImpl: (async () => {
           throw new Error("connection refused");
-        },
+        }) as typeof fetch,
         userConfigPath
       }
     );
@@ -354,40 +369,13 @@ describe("doctorService", () => {
     const checks = (
       outcome.result.details as { checks: Array<{ name: string; ok: boolean; message?: string }> }
     ).checks;
-    const pingCheck = checks.find((c) => c.name === "provider-ping")!;
-    expect(pingCheck.ok).toBe(false);
-    expect(pingCheck.message).toContain("connection refused");
+    const endpointCheck = checks.find((c) => c.name === "provider-endpoint")!;
+    expect(endpointCheck.ok).toBe(false);
+    // Network failures are classified as a provider discovery failure message.
+    expect(endpointCheck.message).toMatch(/Model discovery request failed|connection refused/i);
   });
 
-  it("does not claim full readiness when provider-ping is deferred (no seam)", async () => {
-    const root = await tempRoot();
-    const userConfigPath = await writeControlledUserConfig({
-      activeProvider: "ollama",
-      providers: { ollama: { provider: "ollama", apiKey: "test-key" } }
-    });
-    const outcome = await doctorService(
-      { root },
-      {
-        exiftoolProbe: async () => undefined,
-        userConfigPath
-      }
-    );
-    // Deferred ping must not be ok, and overall status must not be success.
-    expect(outcome.exitCode).toBe(5);
-    expect(outcome.result.status).toBe("failed");
-    expect(outcome.result.reason).toBe("doctor_not_verified");
-    const checks = (
-      outcome.result.details as {
-        checks: Array<{ name: string; ok: boolean; deferred?: boolean; message?: string }>;
-      }
-    ).checks;
-    const pingCheck = checks.find((c) => c.name === "provider-ping")!;
-    expect(pingCheck.ok).toBe(false);
-    expect(pingCheck.deferred).toBe(true);
-    expect(pingCheck.message).toContain("deferred");
-  });
-
-  it("reports ok when no provider api key is configured (no ping required)", async () => {
+  it("reports ok when no provider api key is configured (no reachability required)", async () => {
     const root = await tempRoot();
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "ollama",
@@ -401,14 +389,15 @@ describe("doctorService", () => {
       }
     );
     // No api key means provider-config is ok=false, so overall fails, but
-    // no provider-ping check is added.
+    // no provider-endpoint/model checks are added.
     const checks = (outcome.result.details as { checks: Array<{ name: string; ok: boolean }> })
       .checks;
-    expect(checks.some((c) => c.name === "provider-ping")).toBe(false);
+    expect(checks.some((c) => c.name === "provider-endpoint")).toBe(false);
+    expect(checks.some((c) => c.name === "provider-model")).toBe(false);
     expect(checks.find((c) => c.name === "provider-config")!.ok).toBe(false);
   });
 
-  it("masks URL basic-auth credentials in endpoint reported by doctor provider-ping", async () => {
+  it("masks URL basic-auth credentials in endpoint reported by doctor provider checks", async () => {
     const root = await tempRoot();
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "openrouter",
@@ -424,7 +413,7 @@ describe("doctorService", () => {
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch(),
         userConfigPath
       }
     );
@@ -434,7 +423,7 @@ describe("doctorService", () => {
     expect(json).toContain("[REDACTED]");
   });
 
-  it("masks short query-param tokens in endpoint reported by doctor provider-ping", async () => {
+  it("masks short query-param tokens in endpoint reported by doctor provider checks", async () => {
     const root = await tempRoot();
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "gemini",
@@ -442,6 +431,7 @@ describe("doctorService", () => {
         gemini: {
           provider: "gemini",
           endpoint: "https://host.com?api_key=x",
+          model: "gemini-2.0-flash",
           apiKey: "test-key"
         }
       }
@@ -450,7 +440,7 @@ describe("doctorService", () => {
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch("gemini-2.0-flash"),
         userConfigPath
       }
     );
@@ -467,6 +457,7 @@ describe("doctorService", () => {
         gemini: {
           provider: "gemini",
           endpoint: "https://host.com?refresh_token=rt-secret&id_token=it-secret#client_secret=cs-secret",
+          model: "gemini-2.0-flash",
           apiKey: "test-key"
         }
       }
@@ -475,7 +466,7 @@ describe("doctorService", () => {
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch("gemini-2.0-flash"),
         userConfigPath
       }
     );
@@ -503,13 +494,13 @@ describe("doctorService", () => {
     );
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "ollama",
-      providers: { ollama: { provider: "ollama", apiKey: "test-key" } }
+      providers: { ollama: { provider: "ollama", model: "minimax-m3", apiKey: "test-key" } }
     });
     const outcome = await doctorService(
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch(),
         userConfigPath
       }
     );
@@ -541,13 +532,13 @@ describe("doctorService", () => {
     );
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "ollama",
-      providers: { ollama: { provider: "ollama", apiKey: "test-key" } }
+      providers: { ollama: { provider: "ollama", model: "minimax-m3", apiKey: "test-key" } }
     });
     const outcome = await doctorService(
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch(),
         userConfigPath
       }
     );
@@ -580,13 +571,13 @@ describe("doctorService", () => {
     }
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "ollama",
-      providers: { ollama: { provider: "ollama", apiKey: "test-key" } }
+      providers: { ollama: { provider: "ollama", model: "minimax-m3", apiKey: "test-key" } }
     });
     const outcome = await doctorService(
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch(),
         userConfigPath
       }
     );
@@ -620,13 +611,13 @@ describe("doctorService", () => {
     }
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "ollama",
-      providers: { ollama: { provider: "ollama", apiKey: "test-key" } }
+      providers: { ollama: { provider: "ollama", model: "minimax-m3", apiKey: "test-key" } }
     });
     const outcome = await doctorService(
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch(),
         userConfigPath
       }
     );
@@ -644,13 +635,13 @@ describe("doctorService", () => {
     const root = await tempRoot();
     const userConfigPath = await writeControlledUserConfig({
       activeProvider: "ollama",
-      providers: { ollama: { provider: "ollama", apiKey: "test-key" } }
+      providers: { ollama: { provider: "ollama", model: "minimax-m3", apiKey: "test-key" } }
     });
     const outcome = await doctorService(
       { root },
       {
         exiftoolProbe: async () => undefined,
-        pingProvider: async () => undefined,
+        fetchImpl: healthyDiscoveryFetch(),
         userConfigPath
       }
     );

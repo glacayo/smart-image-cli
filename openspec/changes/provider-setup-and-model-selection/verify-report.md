@@ -1,27 +1,26 @@
 ```yaml
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:2eca235f03f8554c1729aff1a350d7fb57cef1992249e0eb3638b4f315445847
+evidence_revision: sha256:7d327c37f1d316a5f7957e677205ad6ca13a536f3724ea3bab4b2cbcefcd80ac
 verdict: pass
 blockers: 0
 critical_findings: 0
 requirements: 9/9
 scenarios: 17/17
-test_command: "& \"C:\\laragon\\bin\\nodejs\\node-v22\\npm.cmd\" test"
+test_command: '$env:PATH = "C:\laragon\bin\nodejs\node-v22;$env:PATH"; & "C:\laragon\bin\nodejs\node-v22\npm.cmd" test'
 test_exit_code: 0
-test_output_hash: sha256:0b60693a805a75053d555ec5ffbbfa3652f9045173afd29d86bb0175aa986ded
-build_command: "& \"C:\\laragon\\bin\\nodejs\\node-v22\\npm.cmd\" run build"
+test_output_hash: sha256:aa1504dc7049574aee97d7ef2b8d3650bb39934f6bcacc015fc0301f5290f4cd
+build_command: '$env:PATH = "C:\laragon\bin\nodejs\node-v22;$env:PATH"; & "C:\laragon\bin\nodejs\node-v22\npm.cmd" run build'
 build_exit_code: 0
 build_output_hash: sha256:01eb719a642fb187f6f513d9151b5ed21d94cd0a1019b40fd935215d5ee5c08d
 ```
 ## Verification Report
 
-**Change**: `provider-setup-and-model-selection`
-**Scope**: PR4 only — guided provider setup wizard (`config setup`)
-**Branch**: `feat/provider-setup-wizard`
-**Artifact store**: OpenSpec
-**Mode**: Strict TDD
-**Spec inventory read**: 9 requirements / 17 scenarios total; PR4 verification scope covers 5 requirements / 8 scenarios.
-**Out-of-scope by user instruction**: PR5 doctor/docs/beta cleanup remains pending and was not treated as a PR4 failure.
+**Change**: `provider-setup-and-model-selection`  
+**Scope**: PR5 only — doctor/docs/final gates + beta cleanup/testing prep  
+**Branch**: `feat/provider-setup-final-polish`  
+**Artifact store**: OpenSpec  
+**Mode**: Strict TDD  
+**Spec inventory read**: 9 requirements / 17 scenarios total.
 
 ---
 
@@ -29,12 +28,14 @@ build_output_hash: sha256:01eb719a642fb187f6f513d9151b5ed21d94cd0a1019b40fd93521
 
 | Metric | Value |
 |--------|-------|
-| PR4 tasks total | 3 |
-| PR4 tasks complete | 3 |
-| PR4 tasks incomplete | 0 |
-| Out-of-scope PR5 tasks pending | 4 |
+| Implementation tasks total | 14 |
+| Implementation tasks complete | 14 |
+| Implementation tasks incomplete | 0 |
+| Done criteria total | 2 |
+| Done criteria complete | 2 |
+| PR5 tasks complete | 4/4 |
 
-PR4 task status from `tasks.md`: 4.1, 4.2, and 4.3 are checked. PR5 tasks 5.1-5.4 are unchecked but explicitly excluded from this verification.
+`tasks.md` marks PR1-PR5 tasks 1.1 through 5.4 complete, plus both Done Criteria complete. `apply-progress.md` reports PR5 doctor/docs/gates and beta cleanup complete.
 
 ---
 
@@ -42,18 +43,35 @@ PR4 task status from `tasks.md`: 4.1, 4.2, and 4.3 are checked. PR5 tasks 5.1-5.
 
 | Command | Exit | Result | Output hash |
 |---------|------|--------|-------------|
-| `& "C:\laragon\bin\nodejs\node-v22\npm.cmd" test -- test/app/setup-service.test.ts test/cli/prompter.test.ts test/e2e/config-setup.test.ts test/commands/config-setup.test.ts` | 0 | 4 files, 18 tests passed | `sha256:fc3334cde6a78da36851aba4d8160efd6b74134e6e18636e4dfdb56c4625387a` |
-| `& "C:\laragon\bin\nodejs\node-v22\npm.cmd" test -- test/app/config-service-models.test.ts test/commands/config.test.ts test/adapters/vision/model-discovery.test.ts test/adapters/vision/vision-hints.test.ts test/app/config-doctor-library.test.ts` | 0 | 5 files, 67 tests passed | `sha256:ba1556f33a09fb799d5edf7a33c017042681b84567d48de8fcddd2848e5b5826` |
-| `& "C:\laragon\bin\nodejs\node-v22\npm.cmd" run typecheck` | 0 | Passed (`tsc --noEmit`) | `sha256:aef01e2f065c5b263a5bc6876dc5e7c55eccce9a567b9a7c18e335732b264e48` |
-| `& "C:\laragon\bin\nodejs\node-v22\npm.cmd" run lint` | 0 | Passed (`eslint .`) | `sha256:f81447fe2fa74ed041bb627a097fc396121743f5fa6261ca44b01d7263a883c7` |
-| `& "C:\laragon\bin\nodejs\node-v22\npm.cmd" run openspec:validate -- provider-setup-and-model-selection` | 0 | Passed (`Change 'provider-setup-and-model-selection' is valid`) | `sha256:b31a8ae8f851b7f8021cd8fb5a4f215743664311acfa3320b94329b70ed71b3e` |
-| `& "C:\laragon\bin\nodejs\node-v22\npm.cmd" test` | 0 | 35 files, 348 tests passed | `sha256:0b60693a805a75053d555ec5ffbbfa3652f9045173afd29d86bb0175aa986ded` |
-| `& "C:\laragon\bin\nodejs\node-v22\npm.cmd" run build` | 0 | Passed (`tsc -p tsconfig.json`) | `sha256:01eb719a642fb187f6f513d9151b5ed21d94cd0a1019b40fd935215d5ee5c08d` |
+| `$env:PATH = "C:\laragon\bin\nodejs\node-v22;$env:PATH"; & "C:\laragon\bin\nodejs\node-v22\npm.cmd" test` | 0 | Full suite rerun passed: 37 files, 357 tests passed | `sha256:aa1504dc7049574aee97d7ef2b8d3650bb39934f6bcacc015fc0301f5290f4cd` |
+| `$env:PATH = "C:\laragon\bin\nodejs\node-v22;$env:PATH"; & "C:\laragon\bin\nodejs\node-v22\npm.cmd" run build` | 0 | Passed (`tsc -p tsconfig.json`) | `sha256:01eb719a642fb187f6f513d9151b5ed21d94cd0a1019b40fd935215d5ee5c08d` |
+| `$env:PATH = "C:\laragon\bin\nodejs\node-v22;$env:PATH"; & "C:\laragon\bin\nodejs\node-v22\npm.cmd" run openspec:validate -- provider-setup-and-model-selection` | 0 | Passed (`Change 'provider-setup-and-model-selection' is valid`) | `sha256:b31a8ae8f851b7f8021cd8fb5a4f215743664311acfa3320b94329b70ed71b3e` |
 
-**test_output_hash**: `sha256:0b60693a805a75053d555ec5ffbbfa3652f9045173afd29d86bb0175aa986ded`  
-**build_output_hash**: `sha256:01eb719a642fb187f6f513d9151b5ed21d94cd0a1019b40fd935215d5ee5c08d`
+**Current full-suite evidence**:
 
-Coverage: ➖ Not available (`openspec/config.yaml` marks coverage unavailable; threshold 0).
+```text
+> smart-image-cli@0.1.0 test
+> vitest run
+
+ RUN  v4.1.10 C:/laragon/www/img-ia-analyzer-resizer
+
+ Test Files  37 passed (37)
+      Tests  357 passed (357)
+   Duration  10.77s
+```
+
+**Current build evidence**:
+
+```text
+> smart-image-cli@0.1.0 build
+> tsc -p tsconfig.json
+```
+
+**Prior flake context**: the previous verification run had focused PR5 tests passing 51/51, related provider/setup/config tests passing 65/65, and typecheck/lint/format/build/OpenSpec validate passing, but full `npm test` failed once in `test/integration/optimization-flow.test.ts` with an EXIF orientation timeout. The isolated rerun of that optimization test then passed 6/6. This rerun is the authoritative final full-suite evidence and passed 357/357.
+
+**Execution note**: this shell required prepending `C:\laragon\bin\nodejs\node-v22` to `PATH` so `npm.cmd` could resolve `node`; the resulting command executed the same project `npm test` script (`vitest run`).
+
+**Coverage**: ➖ Coverage analysis skipped — no coverage script/package is configured for this project.
 
 ---
 
@@ -61,14 +79,14 @@ Coverage: ➖ Not available (`openspec/config.yaml` marks coverage unavailable; 
 
 | Check | Result | Details |
 |-------|--------|---------|
-| TDD Evidence reported | ✅ | `apply-progress.md` contains a PR4 TDD Cycle Evidence table. |
-| All PR4 tasks have tests | ✅ | 3/3 PR4 task rows list test files. |
-| RED confirmed (tests exist) | ✅ | `test/app/setup-service.test.ts`, `test/e2e/config-setup.test.ts`, `test/commands/config-setup.test.ts`, and `test/cli/prompter.test.ts` exist and were executed. |
-| GREEN confirmed (tests pass) | ✅ | Focused PR4 tests passed: 18/18. |
-| Triangulation adequate | ✅ | Non-TTY happy/incomplete/auth/endpoint/manual/non-vision/update, TTY prompt/manual/confirm, CLI routing, and e2e no-hang/no-leak paths are covered. |
-| Safety Net for modified files | ✅ | Apply evidence reports prior config/doctor/models/command safety nets for modified routing; prompter is new. |
+| TDD Evidence reported | ✅ | `apply-progress.md` contains a Strict TDD cycle table for PR5. |
+| All PR5 code tasks have tests | ✅ | 5.1 and 5.2 are covered by doctor unit/e2e tests and setup reuse regression; 5.3 is command-gate evidence; 5.4 is operational cleanup evidence, not a code behavior. |
+| RED confirmed (tests exist) | ✅ | `test/app/doctor-service.test.ts`, `test/e2e/doctor.test.ts`, `test/app/setup-service.test.ts`, and migrated doctor coverage in `test/app/config-doctor-library.test.ts` exist. |
+| GREEN confirmed (tests pass) | ✅ | Current full suite passed 357/357. Prior focused PR5 tests passed 51/51 and related provider/setup/config tests passed 65/65. |
+| Triangulation adequate | ✅ | Healthy endpoint/model, missing model, auth failure, unsupported discovery, no-key skip, endpoint credential redaction, e2e healthy and e2e missing-model paths are covered. |
+| Safety net for modified files | ✅ | Full suite rerun passed all 37 files; prior focused and related commands covered the modified PR5 seams. |
 
-**TDD Compliance**: 6/6 checks passed
+**TDD Compliance**: 6/6 PR5 checks passed.
 
 ---
 
@@ -76,61 +94,74 @@ Coverage: ➖ Not available (`openspec/config.yaml` marks coverage unavailable; 
 
 | Layer | Tests | Files | Tools |
 |-------|-------|-------|-------|
-| Unit | 14 | 2 | Vitest (`setup-service`, `prompter`) |
-| Integration / command | 1 | 1 | Vitest + Commander seam |
-| E2E | 3 | 1 | Vitest in-process CLI harness |
-| **Total PR4 focused** | **18** | **4** | |
+| Unit / app service | 7 PR5-specific tests | 2 | Vitest (`doctor-service`, setup reuse) |
+| Integration / regression | Existing migrated doctor/config/library checks | 1 | Vitest app-service seams |
+| E2E / CLI harness | 2 PR5-specific tests | 1 | Vitest in-process CLI harness |
+| **Focused PR5 total** | **51 passing tests** | **4 files** | |
+| **Full suite rerun** | **357 passing tests** | **37 files** | Vitest |
 
 ---
 
 ### Changed File Coverage
 
-Coverage analysis skipped — no coverage tool detected in OpenSpec testing capabilities.
+Coverage analysis skipped — no coverage tool detected.
 
 ---
 
 ### Assertion Quality
 
-**Assertion quality**: ✅ All reviewed PR4 assertions verify real behavior. No tautologies, ghost loops, type-only standalone assertions, or secret-insensitive smoke tests were found in the four PR4-focused test files.
+**Assertion quality**: ✅ Reviewed PR5-focused tests assert real behavior: production services/CLI are invoked, endpoint/model check names and statuses are asserted, missing-model messages point to `config setup`, and raw API-key/endpoint credentials are asserted absent from JSON/stdout/stderr. No tautologies, ghost loops, or smoke-only assertions were found in the PR5-focused test files.
 
 ---
 
 ### Quality Metrics
 
-**Linter**: ✅ No errors (`npm run lint`)  
-**Type Checker**: ✅ No errors (`npm run typecheck`)  
-**OpenSpec Validate**: ✅ Passed
+**Full Test Suite**: ✅ Passed (`npm test`, 357/357)  
+**Build**: ✅ Passed (`npm run build`)  
+**OpenSpec Validate**: ✅ Passed (`npm run openspec:validate -- provider-setup-and-model-selection`)  
+**Type Checker / Linter / Formatter**: ✅ Prior verification passed; not rerun in this targeted flake rerun because build/full tests/OpenSpec validate were the minimal current supporting gates requested.
 
 ---
 
-### Spec Compliance Matrix (PR4 Scope)
+### Spec Compliance Matrix
 
-| Requirement | Scenario | Test evidence | Result |
-|-------------|----------|---------------|--------|
-| Guided Setup Flow | Interactive happy path | `test/app/setup-service.test.ts` > `uses prompter for provider, masked key, and model when flags are absent` | ✅ COMPLIANT |
-| Guided Setup Flow | Non-interactive agent setup | `test/e2e/config-setup.test.ts` > `completes non-interactive setup with flags and does not echo the api key`; `test/app/setup-service.test.ts` > non-TTY happy path | ✅ COMPLIANT |
-| Key Validation Without Leakage | Invalid key rejected safely | `test/app/setup-service.test.ts` > `surfaces typed auth failure with exit 4 and does not leak the key`; `test/e2e/config-setup.test.ts` > invalid key exit 4/no leak | ✅ COMPLIANT |
-| Model Discovery With Fallback | Models listed for selection | `test/app/setup-service.test.ts` > interactive prompter model selection with discovered list; source constructs recommended/other model choices before `prompter.select` | ✅ COMPLIANT |
-| Model Discovery With Fallback | Discovery unavailable | `test/app/setup-service.test.ts` > manual model flag when unsupported; `prompts for manual model id when discovery is unavailable` | ✅ COMPLIANT |
-| Vision Capability Guidance | Vision-capable models highlighted | `test/app/setup-service.test.ts` > non-TTY happy path asserts `visionHint`; source labels recommended choices with `(recommended)` | ✅ COMPLIANT |
-| Vision Capability Guidance | Non-vision candidate warned, not blocked | `test/app/setup-service.test.ts` > `warns on non-vision model but still persists when --yes is set`; TTY confirm test | ✅ COMPLIANT |
-| Model Selection Persistence | Persisted selection reused | `test/app/setup-service.test.ts` and `test/e2e/config-setup.test.ts` assert user-scoped persisted provider/model/key; `src/app/runtime.ts` resolves `user.activeProvider` and provider model for subsequent runtime use. No PR4 test executes `img analyze` after setup. | ⚠️ PARTIAL |
+| Requirement | Scenario | Runtime test evidence | Result |
+|-------------|----------|-----------------------|--------|
+| Guided Setup Flow | Interactive happy path | `test/app/setup-service.test.ts` interactive prompter test; full suite passed | ✅ COMPLIANT |
+| Guided Setup Flow | Non-interactive agent setup | `test/e2e/config-setup.test.ts` non-TTY setup with flags; full suite passed | ✅ COMPLIANT |
+| Key Validation Without Leakage | Invalid key rejected safely | `test/app/setup-service.test.ts`; `test/e2e/config-setup.test.ts` invalid-key/no-leak tests; full suite passed | ✅ COMPLIANT |
+| Model Discovery With Fallback | Models listed for selection | `test/app/setup-service.test.ts`; `test/app/config-service-models.test.ts`; full suite passed | ✅ COMPLIANT |
+| Model Discovery With Fallback | Discovery unavailable | `test/app/setup-service.test.ts` manual fallback tests; full suite passed | ✅ COMPLIANT |
+| Vision Capability Guidance | Vision-capable models highlighted | `test/app/setup-service.test.ts`; `test/adapters/vision/vision-hints.test.ts`; full suite passed | ✅ COMPLIANT |
+| Vision Capability Guidance | Non-vision candidate warned, not blocked | `test/app/setup-service.test.ts` non-vision warning/confirm tests; full suite passed | ✅ COMPLIANT |
+| Model Selection Persistence | Persisted selection reused | `test/app/setup-service.test.ts` setup to `resolveProviderConfig` reuse test; full suite passed | ✅ COMPLIANT |
+| Model Discovery and Connection Test | Models discovered via metadata endpoint | `test/adapters/vision/model-discovery.test.ts`; full suite passed | ✅ COMPLIANT |
+| Model Discovery and Connection Test | Connection test with invalid key | `test/adapters/vision/model-discovery.test.ts`; setup invalid-key tests; full suite passed | ✅ COMPLIANT |
+| Verified Vision-Capable Default | Fresh install analyzes without 404 | `test/adapters/vision/presets.test.ts`; `test/adapters/vision/openai-compat-transport.test.ts`; full suite passed | ✅ COMPLIANT |
+| Typed Error Surfacing | Rate limit is recoverable | `test/adapters/vision/openai-compat-transport.test.ts`; full suite passed | ✅ COMPLIANT |
+| Typed Error Surfacing | Unknown model distinguished from malformed output | `test/adapters/vision/openai-compat-transport.test.ts`; full suite passed | ✅ COMPLIANT |
+| Environment Diagnostics and Config | Doctor reports readiness | `test/app/config-doctor-library.test.ts`; `test/app/doctor-service.test.ts`; full suite passed | ✅ COMPLIANT |
+| Environment Diagnostics and Config | Doctor shows active provider detail, redacted | `test/app/doctor-service.test.ts`; `test/e2e/doctor.test.ts`; full suite passed | ✅ COMPLIANT |
+| Environment Diagnostics and Config | Unreachable model reported | `test/app/doctor-service.test.ts`; `test/e2e/doctor.test.ts`; full suite passed | ✅ COMPLIANT |
+| Environment Diagnostics and Config | Key set triggers connection test | `test/app/config-service-models.test.ts`; full suite passed | ✅ COMPLIANT |
 
-**PR4 compliance summary**: 7/8 scenarios compliant, 1/8 partial, 0 failing, 0 untested.
-
-Out-of-scope scenarios from the same OpenSpec change were not failed for PR4: AI provider discovery/default/typed-error scenarios are PR1-PR2 foundations guarded by related regression tests; `config models` and key-set connection are PR3 guarded by related regression tests; doctor reachability/docs scenarios are PR5 pending by task plan.
+**Compliance summary**: 17/17 scenarios have passing runtime coverage. Current full-suite rerun passed.
 
 ---
 
-### Correctness (Static — Structural Evidence)
+### Correctness (Static Evidence)
 
 | Requirement | Status | Notes |
 |------------|--------|-------|
-| Guided Setup Flow | ✅ Implemented | `setupService` orchestrates provider → key → connection test → discovery/list/manual model → user config write. `config.ts` exposes `config setup` flags and forces non-TTY behavior in JSON mode. |
-| Key Validation Without Leakage | ✅ Implemented | `ModelDiscoveryClient.testConnection()` runs before persistence; provider failures are mapped to typed exit 4 results and redacted with `defaultSecretRedactor`. |
-| Model Discovery With Fallback | ✅ Implemented | Supported listings use annotated model choices; unsupported listings set source `manual` and allow manual entry/flag. |
-| Vision Capability Guidance | ✅ Implemented | `annotateModelsWithVisionHints`, `resolveVisionHint`, and warning/confirm flow steer but do not block. No image probe is issued. |
-| Model Selection Persistence | ⚠️ Partial runtime proof | Implementation writes user-scoped config via `writeUserConfig` mode `0600`; tests assert persistence. Runtime reuse is structurally present through `resolveProviderConfig`, but not proven by a PR4 analyze-after-setup test. |
+| Guided Setup Flow | ✅ Implemented | `setupService` handles provider/key/test/list/select/persist with non-TTY no-prompt behavior. |
+| Key Validation Without Leakage | ✅ Implemented | Setup and doctor use `defaultSecretRedactor`; tests inject secret-bearing provider errors and assert no leak. |
+| Model Discovery With Fallback | ✅ Implemented | `ModelDiscoveryClient` and setup/config models preserve manual fallback behavior. |
+| Vision Capability Guidance | ✅ Implemented | Vision hints remain warn-not-block and metadata-only. |
+| Model Selection Persistence | ✅ Implemented | `setupService` writes user-scoped provider/model; `resolveProviderConfig` reuse is covered. |
+| Model Discovery and Connection Test | ✅ Implemented | Metadata-only `/models` checks are reused for setup, config models/key test, and doctor. |
+| Verified Vision-Capable Default | ✅ Implemented | Preset tests run in the full suite; design records `minimax-m3`. |
+| Typed Error Surfacing | ✅ Implemented | Transport/discovery typed errors are covered by adapter tests. |
+| Environment Diagnostics and Config | ✅ Implemented | `doctorService` reports `provider-config`, `provider-endpoint`, and `provider-model`; `commands/doctor.ts` help text mentions endpoint + selected model reachability. |
 
 ---
 
@@ -138,43 +169,50 @@ Out-of-scope scenarios from the same OpenSpec change were not failed for PR4: AI
 
 | Decision / Design Point | Followed? | Notes |
 |-------------------------|-----------|-------|
-| Wizard placement in `setup-service.ts` with injected prompter/fetch/user config seams | ✅ Yes | `SetupServiceOptions` includes `fetchImpl`, `prompter`, `userConfigPath`, `isTty`, and `stderr`. |
-| Connection test uses metadata endpoint, not paid chat/image probe | ✅ Yes | `setupService` calls `ModelDiscoveryClient.testConnection()` / `listModels()`; discovery client uses `GET {endpoint}/models`. |
-| TTY uses masked key prompt; non-TTY uses flags | ✅ Yes | `createReadlinePrompter.password()` uses muted output; `config.ts --json` passes `isTty:false`; incomplete flags exit 3. |
-| JSON/non-TTY output contract | ✅ Yes | E2E verifies exactly one JSON object for incomplete non-TTY setup and no API key in stdout/stderr/JSON. |
-| No schema migration | ✅ Yes | Setup writes existing `activeProvider` and `providers.<id>` fields. |
-| Chained PR review budget | ⚠️ Deviated | `apply-progress.md` records PR4 authored diff at about 1,100 lines versus the 400-line budget, with a cohesive-slice exception. |
+| `ModelDiscoveryClient` adapter for metadata-only checks | ✅ Yes | Doctor uses it for endpoint/model reachability; no image bytes or chat probes are introduced. |
+| Typed 401/403/404 errors | ✅ Yes | Doctor/config/setup map provider auth, endpoint not found, and model not found through existing typed errors. |
+| Vision capability warn-not-block | ✅ Yes | Preserved from setup/vision hints; PR5 doctor only verifies configured reachability. |
+| Wizard seams (`fetchImpl`, user config path, prompter) | ✅ Yes | PR5 reuses `fetchImpl`/config seams for deterministic doctor/setup tests. |
+| JSON shapes include doctor provider checks | ✅ Yes | Doctor output includes `provider-config`, `provider-endpoint`, and `provider-model` in the `checks[]` envelope. |
+| No schema migration | ✅ Yes | User/project config shapes remain additive/unchanged. |
+| Chained PR review budget | ⚠️ Exception | `apply-progress.md` records PR5 authored diff at about 860 lines, above the 400-line target, with a cohesive-slice exception. |
 
 ---
 
 ### No-Secret / Redaction Evidence
 
-- Focused PR4 tests assert setup result JSON, stdout, and stderr do not contain entered API keys.
-- Invalid-key tests inject provider error bodies containing the key and verify the returned error/result does not leak it.
-- Project config schema rejects secret-looking values; PR4 setup writes to user-scoped config only.
+- `test/app/doctor-service.test.ts` asserts the provider API key is absent from doctor result JSON and endpoint credentials/query tokens are redacted.
+- `test/e2e/doctor.test.ts` asserts API key absence from stdout, stderr, and parsed JSON for healthy and missing-model paths.
+- `test/app/config-doctor-library.test.ts` retains defensive project/user config redaction checks.
 - Verification report intentionally excludes raw test API key literals.
 
 ---
 
-### Non-Interactive / No-Hang Evidence
+### Beta Cleanup / Testing Prep Evidence
 
-- `src/commands/config.ts` forces `{ isTty: false }` when `--json` is used.
-- `setupService` returns `invalid_input` exit 3 before network or prompter calls when required non-TTY flags are missing.
-- E2E test `exits 3 without hanging when required flags are missing` passed in the focused PR4 command run.
+Read-only verification of `C:\laragon\www\test-img-ia-analyzer-resizermain` found:
+
+| Check | Evidence | Result |
+|-------|----------|--------|
+| Package artifacts removed | `node_modules` absent, `package-lock.json` absent, `.atl/*.tgz` count 0 | ✅ |
+| Customer images present | Recursive `CUSTOMER-IMAGES` entry count is 19 | ✅ |
+| Site exists | Target site path exists | ✅ |
+
+Historical "untouched" can only be trusted from `apply-progress.md` before/after evidence; this rerun performed no writes and confirmed the current preserved state.
 
 ---
 
 ### Issues Found
 
-**CRITICAL** (must fix before archive):
-None.
+**CRITICAL**: None.
 
-**WARNING** (should fix):
-1. PR4 exceeded the 400-line review budget (`apply-progress.md` reports about 1,100 authored lines). The slice is cohesive, but review risk remains.
-2. `Persisted selection reused` is only partially proven at runtime: tests prove user-scoped persistence, and source inspection shows subsequent runtime config resolution uses it, but no PR4 test runs `img analyze` after setup.
+**WARNING**:
+1. Prior verification hit a known flaky full-suite timeout in `test/integration/optimization-flow.test.ts`; the isolated rerun passed, and this authoritative full-suite rerun passed 357/357.
+2. PR5 exceeds the 400-line review budget (`apply-progress.md` documents about 860 authored lines) and relies on a cohesive-slice exception.
+3. Beta cleanup historical non-modification cannot be independently reconstructed after the fact; current read-only state matches the recorded preservation evidence.
 
-**SUGGESTION** (nice to have):
-- Add a small analyze-after-setup integration/e2e test in PR5 or follow-up to close the partial persistence-reuse proof.
+**SUGGESTION**:
+- Consider stabilizing the optimization orientation timeout to reduce future verification noise, even though it passed in this rerun.
 
 ---
 
@@ -182,4 +220,4 @@ None.
 
 PASS WITH WARNINGS
 
-PR4 guided provider setup wizard is implemented, statically coherent with the PR4 design, and passed all focused, related, quality, OpenSpec, build, and full-suite commands. Remaining warnings are review-size risk and one partial runtime proof for analyze reuse; PR5 pending work was deliberately excluded from the verdict.
+PR5 doctor/docs/beta cleanup is task-complete, OpenSpec-valid, statically coherent, and covered by passing runtime evidence. The prior full-suite flake did not reproduce: current `npm test` passed 357/357, with build and OpenSpec validate also passing.

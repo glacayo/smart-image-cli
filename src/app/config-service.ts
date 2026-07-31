@@ -13,10 +13,7 @@ import {
   ModelNotFoundProviderError,
   VisionProviderError
 } from "../adapters/vision/provider.js";
-import {
-  getVisionProviderPreset,
-  type VisionProviderId
-} from "../adapters/vision/presets.js";
+import { getVisionProviderPreset, type VisionProviderId } from "../adapters/vision/presets.js";
 import {
   emptyProjectConfig,
   parseProjectConfig,
@@ -353,9 +350,7 @@ function writeHumanConnectionOutcome(
 function resolveProviderTarget(
   current: UserConfig,
   options: Pick<ConfigServiceOptions, "provider" | "endpoint">
-):
-  | { providerId: VisionProviderId; endpoint: string; apiKey: string }
-  | { error: ServiceOutcome } {
+): { providerId: VisionProviderId; endpoint: string; apiKey: string } | { error: ServiceOutcome } {
   const providerRaw = options.provider ?? current.activeProvider;
   if (!isVisionProviderId(providerRaw)) {
     return {

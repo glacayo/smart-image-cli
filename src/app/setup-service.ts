@@ -1,10 +1,6 @@
 import { EXIT_CODES } from "../cli/exit-codes.js";
 import { errorResult, successResult } from "../cli/output.js";
-import {
-  createReadlinePrompter,
-  isInteractiveTty,
-  type Prompter
-} from "../cli/prompter.js";
+import { createReadlinePrompter, isInteractiveTty, type Prompter } from "../cli/prompter.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
 import { ModelDiscoveryClient } from "../adapters/vision/model-discovery.js";
 import {
@@ -18,10 +14,7 @@ import {
   ModelNotFoundProviderError,
   VisionProviderError
 } from "../adapters/vision/provider.js";
-import {
-  getVisionProviderPreset,
-  type VisionProviderId
-} from "../adapters/vision/presets.js";
+import { getVisionProviderPreset, type VisionProviderId } from "../adapters/vision/presets.js";
 import type { UserConfig } from "../config/user-config.js";
 import { readUserConfig, writeUserConfig, type ServiceOutcome } from "./runtime.js";
 
@@ -46,8 +39,7 @@ export type SetupServiceOptions = {
  * Non-TTY invocations never prompt; incomplete flags yield invalid_input (exit 3).
  */
 export async function setupService(options: SetupServiceOptions = {}): Promise<ServiceOutcome> {
-  const interactive =
-    options.isTty ?? isInteractiveTty(process.stdin, process.stdout);
+  const interactive = options.isTty ?? isInteractiveTty(process.stdin, process.stdout);
   const prompter = options.prompter ?? (interactive ? createReadlinePrompter() : undefined);
 
   try {
@@ -93,9 +85,7 @@ export async function setupService(options: SetupServiceOptions = {}): Promise<S
       model = resolved;
     } else {
       source = "manual";
-      warnings.push(
-        `Model discovery unavailable (${listing.reason}). Enter a model id manually.`
-      );
+      warnings.push(`Model discovery unavailable (${listing.reason}). Enter a model id manually.`);
       const resolved = await resolveManualModel(options.model, interactive, prompter);
       if (typeof resolved !== "string") return resolved;
       model = resolved;
@@ -187,16 +177,12 @@ async function resolveProviderId(
 ): Promise<VisionProviderId | ServiceOutcome> {
   if (flag !== undefined && flag.length > 0) {
     if (!isVisionProviderId(flag)) {
-      return incomplete(
-        `Unknown provider "${flag}". Expected ollama, openrouter, or gemini.`
-      );
+      return incomplete(`Unknown provider "${flag}". Expected ollama, openrouter, or gemini.`);
     }
     return flag;
   }
   if (!interactive || prompter === undefined) {
-    return incomplete(
-      "Non-interactive setup requires --provider, --api-key, and --model flags."
-    );
+    return incomplete("Non-interactive setup requires --provider, --api-key, and --model flags.");
   }
   const selected = await prompter.select("Select AI provider", PROVIDER_IDS);
   if (!isVisionProviderId(selected)) {
@@ -212,9 +198,7 @@ async function resolveApiKey(
 ): Promise<string | ServiceOutcome> {
   if (flag !== undefined && flag.length > 0) return flag;
   if (!interactive || prompter === undefined) {
-    return incomplete(
-      "Non-interactive setup requires --provider, --api-key, and --model flags."
-    );
+    return incomplete("Non-interactive setup requires --provider, --api-key, and --model flags.");
   }
   const value = await prompter.password("API key");
   if (value.trim().length === 0) {
@@ -234,17 +218,12 @@ async function resolveModelFromList(input: {
     return input.flagModel;
   }
   if (!input.interactive || input.prompter === undefined) {
-    return incomplete(
-      "Non-interactive setup requires --provider, --api-key, and --model flags."
-    );
+    return incomplete("Non-interactive setup requires --provider, --api-key, and --model flags.");
   }
 
   const recommended = input.models.filter((m) => m.vision === true).map((m) => m.id);
   const others = input.models.filter((m) => m.vision !== true).map((m) => m.id);
-  const labeled = [
-    ...recommended.map((id) => `${id} (recommended)`),
-    ...others
-  ];
+  const labeled = [...recommended.map((id) => `${id} (recommended)`), ...others];
   const choices = labeled.length > 0 ? labeled : input.models.map((m) => m.id);
   const selected = await input.prompter.select("Select model", choices);
   // Strip recommendation suffix if present.

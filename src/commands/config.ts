@@ -13,7 +13,10 @@ export function registerConfigCommand(program: Command): void {
     .argument("[value]", "configuration value for set")
     .option("--project", "target project-local config instead of per-user config")
     .option("--root <root>", "project root for --project config")
-    .option("--provider <id>", "provider id for setup/models/connection test (ollama|openrouter|gemini)")
+    .option(
+      "--provider <id>",
+      "provider id for setup/models/connection test (ollama|openrouter|gemini)"
+    )
     .option("--endpoint <url>", "override provider endpoint for setup/models/connection test")
     .option("--api-key <key>", "API key for non-interactive config setup")
     .option("--model <id>", "model id for non-interactive config setup")
