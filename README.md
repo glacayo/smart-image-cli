@@ -70,11 +70,33 @@ smart-img --json pick ./assets --category bathroom --query "bright shower" --sem
 ```
 
 - `--query <text>` enables intent ranking over indexed metadata (`subject`, `title`, `description`, `altText`, and `categories`).
+- `--source local|unsplash` selects the image source. `local` is the default; `unsplash` is never used as an automatic fallback.
 - `--semantic local|ai` selects the ranker. Omitted `--semantic` defaults to `local` and emits a non-fatal stderr note.
 - `--top-k <1..10>` bounds emitted ranking alternatives; the default is `3`.
 - Local mode is deterministic, requires no provider, and is the default to avoid hidden spend.
 - AI mode is explicit only and sends metadata text to the configured provider. It does not send image bytes, re-read images for ranking, or re-analyze images.
 - AI ranking failures return structured `ai_ranking_failed` output with provider-error exit code `4`; there is no silent local fallback.
+
+### Picking from Unsplash
+
+Use Unsplash only when the user or agent explicitly wants a stock image instead of the local image index.
+
+```bash
+UNSPLASH_ACCESS_KEY="your_access_key" \
+  smart-img --json pick ./assets \
+  --source unsplash \
+  --query "modern spa bathroom hero" \
+  --orientation landscape \
+  --width 1600 \
+  --height 900 \
+  --slot home.hero
+```
+
+- `--source unsplash` requires `--query` so the request has searchable intent.
+- Orientation and dimensions are applied before producing the final asset; `square` maps to Unsplash's `squarish` orientation.
+- The selected image is downloaded under `.img-ia/unsplash`, resized/cropped through the normal output pipeline, and emitted under `_out`.
+- The JSON manifest includes Unsplash attribution fields (`photoId`, `photoUrl`, `photographerName`, `photographerUrl`, `attributionText`, and `attributionHtml`). Keep that attribution with any published usage.
+- The command performs Unsplash download tracking before using the selected image, as required by Unsplash API guidelines.
 
 ## Planned stack
 
