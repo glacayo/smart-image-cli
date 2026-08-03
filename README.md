@@ -8,18 +8,20 @@ Smart Image CLI is designed for developers and AI coding agents that need to wor
 
 ## Release status
 
-Smart Image CLI is ready for its first public package release as `smart-image-cli@0.1.0`.
+Smart Image CLI is ready for its first public package release as `smart-image-cli@0.2.0`.
 
 The validated workflow covers:
 
-- private Ollama setup through `img config setup`
-- provider readiness checks with `img doctor`
+- private Ollama setup through `smart-img config setup`
+- provider readiness checks with `smart-img doctor`
 - real image analysis with Ollama native `POST /api/chat`
 - local indexing and sidecars
 - image listing, stats, optimization, picking, and usage tracking
 - dependency/build directory ignores during recursive analysis
 
 Only Ollama is end-to-end validated for image analysis in this release. OpenRouter, Gemini, and other provider presets should be treated as experimental until they pass the same install → configure → doctor → analyze workflow.
+
+> **Migration note:** `img` is a temporary **failing** migration stub that prints a redirect message to stderr and exits non-zero; it does not run any CLI functionality. `smart-img` is the only functional command in `smart-image-cli@0.2.0`.
 
 ## What it will do
 
@@ -37,16 +39,16 @@ Configure a vision provider once in **user-scoped** config (never commit API key
 
 ```bash
 # Interactive (TTY): provider → API key → connection test → model list → save
-img config setup
+smart-img config setup
 
 # Non-interactive / agents (no prompts; pass flags before the setup action)
-img --json config --provider ollama --api-key "$OLLAMA_API_KEY" --model minimax-m3 setup
+smart-img --json config --provider ollama --api-key "$OLLAMA_API_KEY" --model minimax-m3 setup
 
 # List discoverable models (metadata-only GET /models; no image spend)
-img --json config models --provider ollama
+smart-img --json config models --provider ollama
 
 # Diagnostics: runtime deps + active provider endpoint/model/chat reachability
-img --json doctor
+smart-img --json doctor
 ```
 
 Notes:
@@ -60,11 +62,11 @@ Notes:
 
 ## Picking images with semantic intent
 
-`img pick` can select from the existing local index with structured constraints and, when `--query` is present, rank only the constraint-eligible candidates by metadata.
+`smart-img pick` can select from the existing local index with structured constraints and, when `--query` is present, rank only the constraint-eligible candidates by metadata.
 
 ```bash
-img --json pick ./assets --category bathroom --query "bright naturally lit shower"
-img --json pick ./assets --category bathroom --query "bright shower" --semantic ai --top-k 5
+smart-img --json pick ./assets --category bathroom --query "bright naturally lit shower"
+smart-img --json pick ./assets --category bathroom --query "bright shower" --semantic ai --top-k 5
 ```
 
 - `--query <text>` enables intent ranking over indexed metadata (`subject`, `title`, `description`, `altText`, and `categories`).

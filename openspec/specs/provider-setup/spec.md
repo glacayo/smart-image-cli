@@ -8,12 +8,12 @@ Guide users and agents through safe provider configuration, model discovery, mod
 
 ### Requirement: Guided Setup Flow
 
-The system MUST provide `img config setup` guiding the user through provider choice, API key entry, connection test, model discovery, model selection, and persistence. The flow MUST also run non-interactively via flags with `--json`, honoring the existing machine-readable output contract, and MUST NOT prompt when stdin/stdout is not a TTY.
+The system MUST provide `smart-img config setup` guiding the user through provider choice, API key entry, connection test, model discovery, model selection, and persistence. The flow MUST also run non-interactively via flags with `--json`, honoring the existing machine-readable output contract, and MUST NOT prompt when stdin/stdout is not a TTY.
 
 #### Scenario: Interactive happy path
 
 - GIVEN a TTY session with no configured provider
-- WHEN the user runs `img config setup` and completes provider, key, and model choices
+- WHEN the user runs `smart-img config setup` and completes provider, key, and model choices
 - THEN the connection test passes and the selection is persisted to user-scoped config
 - AND subsequent commands use the chosen provider and model without re-entry
 
@@ -75,5 +75,5 @@ Setup MUST persist the chosen provider and model to user-scoped configuration; p
 #### Scenario: Persisted selection reused
 
 - GIVEN setup previously persisted a provider and model
-- WHEN the user runs `img analyze`
+- WHEN the user runs `smart-img analyze`
 - THEN the persisted provider and model are used without prompting

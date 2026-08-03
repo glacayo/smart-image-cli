@@ -38,7 +38,7 @@ describe("config command setup flags", () => {
 
     await program.parseAsync([
       "node",
-      "img",
+      "smart-img",
       "--json",
       "config",
       "setup",

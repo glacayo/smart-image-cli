@@ -139,7 +139,7 @@ async function runImg(
   }) as typeof process.stderr.write;
 
   try {
-    await runCli(["node", "img", ...args]);
+    await runCli(["node", "smart-img", ...args]);
     const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
     const json =
       lines.length > 0 ? (JSON.parse(lines[lines.length - 1]!) as Record<string, unknown>) : {};

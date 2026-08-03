@@ -142,7 +142,7 @@ export async function setupService(options: SetupServiceOptions = {}): Promise<S
 
     writeHumanLine(
       options.stderr,
-      `img config setup: saved provider=${providerId} model=${model} (connection ok)\n`
+      `smart-img config setup: saved provider=${providerId} model=${model} (connection ok)\n`
     );
 
     return {

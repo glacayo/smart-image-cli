@@ -33,7 +33,7 @@ describe("config command models and provider flags", () => {
 
     await program.parseAsync([
       "node",
-      "img",
+      "smart-img",
       "--json",
       "config",
       "models",
@@ -87,7 +87,7 @@ describe("config command models and provider flags", () => {
 
     await program.parseAsync([
       "node",
-      "img",
+      "smart-img",
       "--json",
       "config",
       "set",

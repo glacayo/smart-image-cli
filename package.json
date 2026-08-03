@@ -1,10 +1,11 @@
 {
   "name": "smart-image-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Agent-friendly CLI for analyzing, organizing, and preparing website image assets.",
   "type": "module",
   "bin": {
-    "img": "dist/cli/program.js"
+    "smart-img": "dist/cli/program.js",
+    "img": "dist/cli/output.js"
   },
   "files": [
     "assets",
@@ -38,5 +39,21 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10"
-  }
+  },
+  "main": "eslint.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glacayo/smart-image-cli.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/glacayo/smart-image-cli/issues"
+  },
+  "homepage": "https://github.com/glacayo/smart-image-cli#readme"
 }

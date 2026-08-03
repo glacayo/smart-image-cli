@@ -1,11 +1,11 @@
 ---
 name: smart-image-cli
-description: Use this skill whenever an AI agent needs to use Smart Image CLI (`img`) to analyze, organize, pick, optimize, or track website images. Trigger on requests mentioning `img analyze`, `img pick`, image selection, image optimization, image library indexing, website assets, Ollama setup, provider diagnostics, or using this repo's image tool. This skill is the operational runbook for Claude, OpenCode, Codex, Gemini, and other coding agents using the tool safely.
+description: Use this skill whenever an AI agent needs to use Smart Image CLI (`smart-img`) to analyze, organize, pick, optimize, or track website images. Trigger on requests mentioning `smart-img analyze`, `smart-img pick`, image selection, image optimization, image library indexing, website assets, Ollama setup, provider diagnostics, or using this repo's image tool. This skill is the operational runbook for Claude, OpenCode, Codex, Gemini, and other coding agents using the tool safely.
 ---
 
 # Smart Image CLI Agent Runbook
 
-Use this skill when you need to operate the `img` CLI from this repository or from an installed package.
+Use this skill when you need to operate the `smart-img` CLI from this repository or from an installed package.
 
 The goal is not merely to run commands. The goal is to help an agent safely turn customer image folders into an indexed, reusable website image library without leaking secrets, modifying originals accidentally, or pretending unsupported providers work.
 
@@ -18,7 +18,7 @@ Agents must not ask the user to paste API keys into chat, logs, issue comments, 
 When configuration is needed, instruct the human to run the CLI setup flow locally and enter the key privately:
 
 ```bash
-img config setup
+smart-img config setup
 ```
 
 During setup, the human should:
@@ -27,12 +27,12 @@ During setup, the human should:
 2. Choose the model they want to use.
 3. Enter their API key in the private prompt.
 4. Let the CLI save it in user-scoped config.
-5. Run `img doctor` afterward.
+5. Run `smart-img doctor` afterward.
 
 If a non-interactive command is absolutely necessary for automation, prefer environment variables and never print the value:
 
 ```bash
-img --json config --provider ollama --api-key "$OLLAMA_API_KEY" --model minimax-m3 setup
+smart-img --json config --provider ollama --api-key "$OLLAMA_API_KEY" --model minimax-m3 setup
 ```
 
 Do not echo `$OLLAMA_API_KEY`. Do not write it into project files. Do not commit config containing secrets.
@@ -44,9 +44,9 @@ For this beta line, only Ollama has been end-to-end validated for real image ana
 The code may contain presets for other providers, but an agent must not claim OpenRouter, Gemini, or another provider is supported until that provider has passed the same evidence standard:
 
 1. Install/configure test.
-2. `img doctor` passes, including provider chat/inference readiness.
-3. `img analyze` succeeds on real copied image files.
-4. `img list`, `img pick`, `img optimize`, `img mark-used`, and `img stats` behave correctly after analysis.
+2. `smart-img doctor` passes, including provider chat/inference readiness.
+3. `smart-img analyze` succeeds on real copied image files.
+4. `smart-img list`, `smart-img pick`, `smart-img optimize`, `smart-img mark-used`, and `smart-img stats` behave correctly after analysis.
 5. Uninstall/cleanup succeeds.
 
 Listing models is not enough. A provider can list models and still fail inference.
@@ -75,13 +75,13 @@ Use the most specific folder that contains the images you want the tool to manag
 Good:
 
 ```bash
-img analyze "./CUSTOMER-IMAGES"
+smart-img analyze "./CUSTOMER-IMAGES"
 ```
 
 Riskier:
 
 ```bash
-img analyze "."
+smart-img analyze "."
 ```
 
 The broader root can include unrelated website files. The CLI ignores common dependency/build folders by default, but the agent should still choose the smallest correct root. Good root selection is not optional housekeeping; it controls what images become part of the library.
@@ -104,8 +104,8 @@ By default, `analyze` skips dependency/build/generated folders such as:
 ### 1. Confirm installation
 
 ```bash
-img --version
-img --help
+smart-img --version
+smart-img --help
 ```
 
 If using a local build from the repo:
@@ -120,7 +120,7 @@ node dist/cli/program.js --help
 Tell the human to run:
 
 ```bash
-img config setup
+smart-img config setup
 ```
 
 Provider choice: `ollama`.
@@ -132,13 +132,13 @@ Never ask the user to paste the key into the conversation. If the user already p
 ### 3. Verify readiness
 
 ```bash
-img doctor
+smart-img doctor
 ```
 
 For JSON output:
 
 ```bash
-img --json doctor
+smart-img --json doctor
 ```
 
 A healthy Ollama setup should include:
@@ -155,13 +155,13 @@ If `provider-chat` fails, `analyze` will not work yet. Fix provider authenticati
 Run `analyze` against the selected image root:
 
 ```bash
-img analyze "<image-root>" --fail-fast
+smart-img analyze "<image-root>" --fail-fast
 ```
 
 For a safe preview:
 
 ```bash
-img analyze "<image-root>" --dry-run --fail-fast
+smart-img analyze "<image-root>" --dry-run --fail-fast
 ```
 
 What `analyze` does:
@@ -177,8 +177,8 @@ Supported categories are loaded from the project taxonomy. If no category fits, 
 ### 5. Inspect the library
 
 ```bash
-img list "<image-root>"
-img stats "<image-root>"
+smart-img list "<image-root>"
+smart-img stats "<image-root>"
 ```
 
 Use `list` to find canonical image paths, hashes, categories, dimensions, and usage records.
@@ -190,7 +190,7 @@ Use `stats` to confirm totals by category/orientation and detect missing thumbna
 Use `pick` after images have been analyzed and indexed.
 
 ```bash
-img pick "<image-root>" --category interiors --orientation portrait --width 300 --height 400 --top-k 3
+smart-img pick "<image-root>" --category interiors --orientation portrait --width 300 --height 400 --top-k 3
 ```
 
 Useful options:
@@ -203,14 +203,14 @@ Useful options:
 - `--slot <name>` and `--location <name>` for usage tracking.
 - `--allow-reuse` only when repeat use is acceptable.
 
-If `pick` returns `no_candidate`, inspect `img list` and loosen constraints intentionally. Do not invent a result.
+If `pick` returns `no_candidate`, inspect `smart-img list` and loosen constraints intentionally. Do not invent a result.
 
 ### 7. Optimize an image
 
-Use canonical paths from `img list`:
+Use canonical paths from `smart-img list`:
 
 ```bash
-img optimize "<image-root>" "interiors/example-001.jpg" --format webp --max-width 800
+smart-img optimize "<image-root>" "interiors/example-001.jpg" --format webp --max-width 800
 ```
 
 The output goes under `_out` by default.
@@ -222,13 +222,13 @@ Do not upscale. Prefer web-friendly formats such as `webp` unless the user requi
 Use `mark-used` when a website slot has consumed an image:
 
 ```bash
-img mark-used "<image-root>" --path "interiors/example-001.jpg" --slot hero --location homepage
+smart-img mark-used "<image-root>" --path "interiors/example-001.jpg" --slot hero --location homepage
 ```
 
 or by hash:
 
 ```bash
-img mark-used "<image-root>" --sha "<sha256>" --slot hero --location homepage
+smart-img mark-used "<image-root>" --sha "<sha256>" --slot hero --location homepage
 ```
 
 Usage tracking helps future agents avoid repeating the same image in the same slot/location.
@@ -247,16 +247,16 @@ When validating the tool, use a temporary sandbox:
 Recommended validation sequence:
 
 ```bash
-img --version
-img config setup
-img doctor --root "<sandbox>/work"
-img analyze "<sandbox>/work" --fail-fast
-img list "<sandbox>/work"
-img stats "<sandbox>/work"
-img optimize "<sandbox>/work" "<canonical-path-from-list>" --format webp --max-width 800
-img pick "<sandbox>/work" --category <category-id> --orientation <orientation> --width 300 --height 400 --top-k 3
-img mark-used "<sandbox>/work" --path "<canonical-path-from-list>" --slot hero --location homepage
-img stats "<sandbox>/work"
+smart-img --version
+smart-img config setup
+smart-img doctor --root "<sandbox>/work"
+smart-img analyze "<sandbox>/work" --fail-fast
+smart-img list "<sandbox>/work"
+smart-img stats "<sandbox>/work"
+smart-img optimize "<sandbox>/work" "<canonical-path-from-list>" --format webp --max-width 800
+smart-img pick "<sandbox>/work" --category <category-id> --orientation <orientation> --width 300 --height 400 --top-k 3
+smart-img mark-used "<sandbox>/work" --path "<canonical-path-from-list>" --slot hero --location homepage
+smart-img stats "<sandbox>/work"
 ```
 
 If testing installation/uninstall, install outside the root being analyzed when possible. If you install inside the analyzed root, dependency directories should be ignored, but a separate install prefix is cleaner.
@@ -271,14 +271,14 @@ Action:
 
 1. Ask the human to rerun private setup:
    ```bash
-   img config setup
+   smart-img config setup
    ```
 2. Confirm provider is `ollama`.
 3. Confirm the chosen model supports vision/image input.
 4. Confirm the API key has inference access.
 5. Re-run:
    ```bash
-   img doctor
+   smart-img doctor
    ```
 
 Do not ask for the API key in chat.
@@ -299,7 +299,7 @@ Cause: no indexed image matches the requested category/orientation/dimensions/re
 
 Action:
 
-1. Run `img list "<root>"`.
+1. Run `smart-img list "<root>"`.
 2. Check actual categories and dimensions.
 3. Loosen constraints intentionally or analyze more images.
 
@@ -309,7 +309,7 @@ Cause: the path/hash is not an indexed live occurrence.
 
 Action:
 
-- Use a path or SHA from `img list`.
+- Use a path or SHA from `smart-img list`.
 - Run `analyze` first if no library exists.
 
 ### Unexpected images are analyzed
@@ -341,7 +341,7 @@ Never include API key values. If a secret appears in tool output, redact it befo
 ## Agent behavior rules
 
 - Prefer commands with `--json` when parsing output programmatically.
-- Use `img list` output as the source of truth for canonical paths and hashes.
+- Use `smart-img list` output as the source of truth for canonical paths and hashes.
 - Do not fabricate success if a command fails.
 - Do not claim provider support without end-to-end evidence.
 - Do not modify customer originals during validation unless the user explicitly chose that folder for organization.

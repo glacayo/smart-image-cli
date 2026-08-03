@@ -163,7 +163,7 @@ export async function doctorService(
             checks.push({
               name: "provider-model",
               ok: false,
-              message: `Could not verify model "${model}" (${listing.reason}). Run \`img config setup\` to choose an available model.`,
+              message: `Could not verify model "${model}" (${listing.reason}). Run \`smart-img config setup\` to choose an available model.`,
               details: { endpoint: maskedEndpoint, model, source: "unavailable" }
             });
           } else {
@@ -179,7 +179,7 @@ export async function doctorService(
               checks.push({
                 name: "provider-model",
                 ok: false,
-                message: `Configured model "${model}" is not available from the provider. Run \`img config setup\` to choose an available model.`,
+                message: `Configured model "${model}" is not available from the provider. Run \`smart-img config setup\` to choose an available model.`,
                 details: { endpoint: maskedEndpoint, model, source: "discovery" }
               });
             }
@@ -188,7 +188,7 @@ export async function doctorService(
           checks.push({
             name: "provider-model",
             ok: false,
-            message: `${message(error)}. Run \`img config setup\` to choose an available model.`,
+            message: `${message(error)}. Run \`smart-img config setup\` to choose an available model.`,
             details: { endpoint: maskedEndpoint, model }
           });
         }
@@ -196,7 +196,7 @@ export async function doctorService(
         checks.push({
           name: "provider-model",
           ok: false,
-          message: `Skipped model reachability because the provider endpoint check failed. Run \`img config setup\` after fixing endpoint/API key issues.`,
+          message: `Skipped model reachability because the provider endpoint check failed. Run \`smart-img config setup\` after fixing endpoint/API key issues.`,
           details: { endpoint: maskedEndpoint, model }
         });
       }
@@ -295,7 +295,7 @@ async function probeProviderChatCompletion(options: {
     nonJsonMessage: "Provider chat completions returned non-JSON response",
     requestFailedMessage: "Provider chat completions request failed",
     authErrorMessage:
-      "Provider chat completions authentication failed. The API key can list models but cannot run inference; verify chat/inference permissions or run `img config setup`."
+      "Provider chat completions authentication failed. The API key can list models but cannot run inference; verify chat/inference permissions or run `smart-img config setup`."
   });
 }
 

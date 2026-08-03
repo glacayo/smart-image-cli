@@ -1,7 +1,7 @@
 schema: spec-driven
 
 context: |
-  Project: smart-image-cli (img-ia-analyzer-resizer) — agent-friendly CLI, published as `img`
+  Project: smart-image-cli (img-ia-analyzer-resizer) — agent-friendly CLI, published as `smart-img`
   Stack: Node >=22, TypeScript 5.7 (ESM), Commander, Zod, Sharp, better-sqlite3, exiftool-vendored
   Architecture: layered CLI — src/cli (commands/output), src/app (services/runtime), src/adapters (vision/db/fs), src/domain, src/config
   Testing: vitest (unit/integration/e2e dirs under test/), eslint (flat config) + typescript-eslint, prettier, tsc --noEmit

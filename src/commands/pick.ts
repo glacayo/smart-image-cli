@@ -62,7 +62,7 @@ export function registerPickCommand(program: Command): void {
       try {
         const parsed = parsePickOptions(options);
         if (parsed.query !== undefined && parsed.semantic === undefined) {
-          process.stderr.write("img pick: --query provided; defaulted to --semantic local\n");
+          process.stderr.write("smart-img pick: --query provided; defaulted to --semantic local\n");
         }
         let deps: PickDeps;
         try {

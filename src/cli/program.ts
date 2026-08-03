@@ -17,9 +17,9 @@ export function createProgram(): Command {
   const program = new Command();
 
   program
-    .name("img")
+    .name("smart-img")
     .description("Analyze, organize, optimize, and select website image assets.")
-    .version("0.1.0")
+    .version("0.2.0")
     .option("--json", "emit a single JSON object on stdout")
     .exitOverride();
 
@@ -48,7 +48,7 @@ export async function runCli(argv: readonly string[] = process.argv): Promise<vo
       }
 
       const wantsJson = argv.includes("--json");
-      emitResult(errorResult("img", "invalid_input", error.message), { json: wantsJson });
+      emitResult(errorResult("smart-img", "invalid_input", error.message), { json: wantsJson });
       process.exitCode = EXIT_CODES.INVALID_INPUT;
       return;
     }
@@ -65,7 +65,7 @@ function isDirectRun(): boolean {
 if (isDirectRun()) {
   runCli().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : "Unexpected failure";
-    emitResult(errorResult("img", "unexpected_error", message), {
+    emitResult(errorResult("smart-img", "unexpected_error", message), {
       json: process.argv.includes("--json")
     });
     process.exitCode = EXIT_CODES.FILESYSTEM_ERROR;

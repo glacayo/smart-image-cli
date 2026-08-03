@@ -43,7 +43,7 @@ describe("pick semantic CLI options", () => {
 
     await program.parseAsync([
       "node",
-      "img",
+      "smart-img",
       "--json",
       "pick",
       "/tmp/project",
@@ -146,7 +146,7 @@ async function runPickCommand(...args: string[]): Promise<{ reason?: string; mes
   const program = new Command().exitOverride().option("--json");
   registerPickCommand(program);
 
-  await program.parseAsync(["node", "img", "--json", "pick", ...args]);
+  await program.parseAsync(["node", "smart-img", "--json", "pick", ...args]);
 
   return JSON.parse(writes.join("")) as { reason?: string; message?: string };
 }

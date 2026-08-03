@@ -342,8 +342,8 @@ function writeHumanConnectionOutcome(
 ): void {
   if (stderr === undefined) return;
   const line = ok
-    ? `img config: connection test ok — ${message}\n`
-    : `img config: connection test failed — ${message}\n`;
+    ? `smart-img config: connection test ok — ${message}\n`
+    : `smart-img config: connection test failed — ${message}\n`;
   stderr.write(line);
 }
 

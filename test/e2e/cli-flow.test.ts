@@ -538,7 +538,7 @@ async function runImg(
     return true;
   }) as typeof process.stderr.write;
   try {
-    await runCli(["node", "img", ...args]);
+    await runCli(["node", "smart-img", ...args]);
     return {
       exitCode: typeof process.exitCode === "number" ? process.exitCode : 0,
       stdout,

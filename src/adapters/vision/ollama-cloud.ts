@@ -211,7 +211,7 @@ function classifyOllamaHttpError(
   if (status === 404) {
     if (bodyText.toLowerCase().includes("model")) {
       return new ModelNotFoundProviderError(
-        `Model "${options.model}" was not found. Run \`img config setup\` to choose an available model.`,
+        `Model "${options.model}" was not found. Run \`smart-img config setup\` to choose an available model.`,
         options.model,
         redacted
       );

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Deliver an agent-friendly `img` command surface: machine-readable output, stable exit codes, safe path handling, and self-diagnostic `config`/`doctor` commands.
+Deliver an agent-friendly `smart-img` command surface: machine-readable output, stable exit codes, safe path handling, and self-diagnostic `config`/`doctor` commands.
 
 ## Requirements
 

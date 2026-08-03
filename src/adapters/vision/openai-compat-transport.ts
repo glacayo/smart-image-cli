@@ -153,7 +153,7 @@ function classifyHttpError(
     if (looksLikeModelNotFound(bodyText)) {
       const namedModel = model ?? extractModelNameFromBody(bodyText) ?? "unknown";
       return new ModelNotFoundProviderError(
-        `Model "${namedModel}" was not found. Run \`img config setup\` to choose an available model.`,
+        `Model "${namedModel}" was not found. Run \`smart-img config setup\` to choose an available model.`,
         namedModel,
         redacted
       );

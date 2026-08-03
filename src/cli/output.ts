@@ -1,3 +1,6 @@
+#!/usr/bin/env node
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { EXIT_CODES, type ExitCode } from "./exit-codes.js";
 
 export type CliStatus = "success" | "partial" | "failed";
@@ -71,9 +74,22 @@ export function exitCodeForResult(
 
 function formatHumanResult(result: CliResult): string {
   if (result.ok) {
-    return result.message ?? `${result.command ?? "img"}: success`;
+    return result.message ?? `${result.command ?? "smart-img"}: success`;
   }
 
   const reason = result.reason ? ` (${result.reason})` : "";
-  return `${result.command ?? "img"}: ${result.message ?? "failed"}${reason}`;
+  return `${result.command ?? "smart-img"}: ${result.message ?? "failed"}${reason}`;
+}
+
+const MIGRATION_MESSAGE =
+  "`img` is no longer a functional command. Use `smart-img` instead. (smart-image-cli@0.2.0)\n";
+
+function isDirectRun(): boolean {
+  const entry = process.argv[1];
+  return entry !== undefined && path.resolve(entry) === fileURLToPath(import.meta.url);
+}
+
+if (isDirectRun()) {
+  process.stderr.write(MIGRATION_MESSAGE);
+  process.exit(EXIT_CODES.INVALID_INPUT);
 }

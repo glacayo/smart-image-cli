@@ -1,6 +1,6 @@
 # Smart Image CLI — Agent Instructions
 
-This repository builds `smart-image-cli`, exposed as the `img` command.
+This repository builds `smart-image-cli`, exposed as the `smart-img` command.
 
 Use these instructions as the project-level rules of the house. For detailed operational workflows, load the project skill:
 
@@ -21,12 +21,12 @@ The portable skill lives at:
 - Provider setup must be done by the human through the private CLI flow:
 
   ```bash
-  img config setup
+  smart-img config setup
   ```
 
 - For this beta line, only `ollama` is end-to-end validated for real image analysis.
 - Do not claim OpenRouter, Gemini, or any other provider works until it has install → configure → doctor → analyze evidence.
-- Listing models is not enough; `provider-chat` must pass and `img analyze` must work on real copied images.
+- Listing models is not enough; `provider-chat` must pass and `smart-img analyze` must work on real copied images.
 
 ## Customer image safety
 
@@ -38,7 +38,7 @@ The portable skill lives at:
 Example preferred root:
 
 ```bash
-img analyze "./CUSTOMER-IMAGES"
+smart-img analyze "./CUSTOMER-IMAGES"
 ```
 
 ## Verification expectations
@@ -57,10 +57,10 @@ npm run format
 For provider/runtime validation, use:
 
 ```bash
-img doctor
-img analyze "<image-root>" --fail-fast
-img list "<image-root>"
-img stats "<image-root>"
+smart-img doctor
+smart-img analyze "<image-root>" --fail-fast
+smart-img list "<image-root>"
+smart-img stats "<image-root>"
 ```
 
 When testing installation/uninstall, use an isolated sandbox and clean it afterward.
@@ -70,7 +70,7 @@ When testing installation/uninstall, use an isolated sandbox and clean it afterw
 - Ollama image analysis uses native `POST /api/chat`.
 - `doctor` checks provider config, endpoint, model, and chat/inference readiness.
 - `analyze` ignores common dependency/build/generated folders such as `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, `.nuxt`, `vendor`, `.img-ia`, and `_out`.
-- `pick` requires an existing analyzed/indexed library; if it returns `no_candidate`, inspect `img list` and adjust constraints instead of inventing a result.
+- `pick` requires an existing analyzed/indexed library; if it returns `no_candidate`, inspect `smart-img list` and adjust constraints instead of inventing a result.
 
 ## Commit discipline
 

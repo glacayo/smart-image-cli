@@ -79,7 +79,7 @@ The default model MUST be a vision-capable model id verified reachable on the de
 #### Scenario: Fresh install analyzes without 404
 
 - GIVEN a fresh install with only an API key configured
-- WHEN `img analyze` runs with the default model
+- WHEN `smart-img analyze` runs with the default model
 - THEN the request does not fail with a model-not-found error
 
 ### Requirement: Secret Handling
