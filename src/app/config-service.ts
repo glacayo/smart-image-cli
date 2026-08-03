@@ -29,6 +29,10 @@ import {
   type ServiceOutcome
 } from "./runtime.js";
 import { setupService, type SetupServiceOptions } from "./setup-service.js";
+import {
+  unsplashSetupService,
+  type UnsplashSetupServiceOptions
+} from "./unsplash-setup-service.js";
 import type { Prompter } from "../cli/prompter.js";
 
 const SECRET_KEY_NAME = /(api[-_]?key|authorization|bearer|token|secret|password|credential)/i;
@@ -134,6 +138,9 @@ export async function configService(
       }
     }
     if (action === "set" && key && value !== undefined) {
+      if (isUnsplashConfigKey(key)) {
+        return unsplashSetBlocked();
+      }
       try {
         const next = setPath(
           structuredClone(current) as Record<string, unknown>,
@@ -174,7 +181,15 @@ export async function configService(
     };
     return setupService(setupOptions);
   }
-
+  if (action === "unsplash" && key === "setup") {
+    const unsplashOptions: UnsplashSetupServiceOptions = {
+      ...(userConfigPath !== undefined ? { userConfigPath } : {}),
+      ...(options.prompter !== undefined ? { prompter: options.prompter } : {}),
+      ...(options.isTty !== undefined ? { isTty: options.isTty } : {}),
+      ...(options.stderr !== undefined ? { stderr: options.stderr } : {})
+    };
+    return unsplashSetupService(unsplashOptions);
+  }
   if (action === "models") {
     return listProviderModels(current, options);
   }
@@ -201,6 +216,9 @@ export async function configService(
     }
   }
   if (action === "set" && key && value !== undefined) {
+    if (isUnsplashConfigKey(key)) {
+      return unsplashSetBlocked();
+    }
     try {
       const next = setPath(
         structuredClone(current) as Record<string, unknown>,
@@ -397,6 +415,35 @@ function isVisionProviderId(value: string): value is VisionProviderId {
 function isApiKeyConfigKey(dottedKey: string): boolean {
   const last = dottedKey.split(".").at(-1) ?? "";
   return API_KEY_SEGMENT.test(last);
+}
+
+/**
+ * True when a dotted `config set` key targets the `unsplash` config subtree
+ * (exactly `unsplash`, or any path under it such as `unsplash.accessKey`).
+ * The Unsplash Access Key must be configured only through the private
+ * interactive prompt (`smart-img config unsplash setup`); the generic
+ * `config set` route is blocked for these keys so the key is never accepted
+ * via process args, logged, or echoed back.
+ */
+function isUnsplashConfigKey(dottedKey: string): boolean {
+  const first = dottedKey.split(".", 1)[0] ?? "";
+  return first === "unsplash";
+}
+
+function unsplashSetBlocked(): ServiceOutcome {
+  return {
+    result: errorResult(
+      "config",
+      "invalid_input",
+      "Unsplash Access Key must be configured through the private interactive prompt. Run `smart-img config unsplash setup` in a private terminal.",
+      {
+        reason: "missing_unsplash_credential",
+        setupCommand:
+          "Run `smart-img config unsplash setup` in a private interactive terminal and paste the key when prompted."
+      }
+    ),
+    exitCode: EXIT_CODES.INVALID_INPUT
+  };
 }
 
 function providerIdFromApiKeyPath(dottedKey: string): string | undefined {

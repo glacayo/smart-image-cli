@@ -185,7 +185,7 @@ Use `list` to find canonical image paths, hashes, categories, dimensions, and us
 
 Use `stats` to confirm totals by category/orientation and detect missing thumbnails or orphaned records.
 
-### 6. Pick a slot-ready image
+### Picking a slot-ready image
 
 Use `pick` after images have been analyzed and indexed.
 
@@ -202,8 +202,45 @@ Useful options:
 - `--format <jpg|png|webp|avif>` output format.
 - `--slot <name>` and `--location <name>` for usage tracking.
 - `--allow-reuse` only when repeat use is acceptable.
+- `--source local|unsplash`: image source. `local` is the default; `unsplash` is never used as an automatic fallback.
 
 If `pick` returns `no_candidate`, inspect `smart-img list` and loosen constraints intentionally. Do not invent a result.
+
+### Unsplash configuration decision gate
+
+`--source unsplash` requires an Unsplash Access Key. This is a separate, persistent private flow — distinct from the Ollama/vision provider setup (`smart-img config setup`).
+
+| Situation | Action |
+| --- | --- |
+| User wants `pick --source unsplash` and no key is configured | Run the Unsplash setup gate below, then STOP and wait for the human to confirm. |
+| `pick --source unsplash` returns `missing_unsplash_credential` | Read the guidance fields, run the setup gate below, then STOP and wait. |
+| User already configured the key via `smart-img config unsplash setup` | Resume directly with `smart-img pick --source unsplash --query ...`. |
+| User pasted an Access Key in chat | Do not repeat, store, or use it. Redirect them to the private setup command. |
+
+Unsplash setup gate (agent runbook):
+
+1. Tell the human: "Unsplash requires an Access Key. Obtain one at https://unsplash.com/developers (Your apps → New demo application)."
+2. Give the private setup command and STOP — do not run it for the human and do not ask for the key:
+
+   ```bash
+   smart-img config unsplash setup
+   ```
+
+3. Wait for the human to confirm setup completed.
+4. Resume:
+
+   ```bash
+   smart-img pick "<image-root>" --source unsplash --query "<intent>" --orientation landscape --width 1600 --height 900 --slot home.hero
+   ```
+
+Hard rules for Unsplash:
+
+- Never ask the user to paste the Access Key into chat, PRs, issues, or docs.
+- `smart-img config unsplash setup` is interactive/private only. There is no `--access-key` flag and no way to pass the key via process args, env, or agent buffers; the key is accepted only through the masked private prompt. In non-TTY/JSON mode it returns actionable guidance telling the human to run it in a private interactive terminal.
+- Never echo the Access Key in logs, commands, or JSON output (it is always `[REDACTED]`).
+- The key is stored only in user-scoped config (`unsplash.accessKey`), never in project config.
+- `UNSPLASH_ACCESS_KEY` is an operator-managed runtime override for `pick --source unsplash` (resolved at runtime, env > user config); it is NOT a setup input and must not be used to route the key through agent-controlled buffers.
+- Unsplash is an image source, not an AI vision provider. Do not conflate `config unsplash setup` with `config setup` (Ollama).
 
 ### 7. Optimize an image
 

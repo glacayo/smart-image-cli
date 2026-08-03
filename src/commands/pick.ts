@@ -8,11 +8,16 @@ import {
   type PickSource,
   type SemanticMode
 } from "../app/pick-service.js";
-import { buildTextRankerProvider, serviceError } from "../app/runtime.js";
+import {
+  buildTextRankerProvider,
+  resolveUnsplashCredential,
+  serviceError
+} from "../app/runtime.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
 import { LocalTextRanker } from "../adapters/vision/local-text-ranker.js";
 import type { ImageOrientation } from "../domain/analysis-schema.js";
 import type { ImageFormat } from "../domain/resize-planner.js";
+import { getUserConfigPath } from "../config/user-config.js";
 
 const VALID_ORIENTATIONS: ReadonlySet<string> = new Set<ImageOrientation>([
   "landscape",
@@ -70,7 +75,11 @@ export function registerPickCommand(program: Command): void {
       }
       try {
         const parsed = parsePickOptions(options);
-        if ((parsed.source ?? "local") === "local" && parsed.query !== undefined && parsed.semantic === undefined) {
+        if (
+          (parsed.source ?? "local") === "local" &&
+          parsed.query !== undefined &&
+          parsed.semantic === undefined
+        ) {
           process.stderr.write("smart-img pick: --query provided; defaulted to --semantic local\n");
         }
         let deps: PickDeps;
@@ -137,7 +146,9 @@ function validatePickEnums(options: Record<string, string | boolean>): CliResult
   return undefined;
 }
 
-function validatePickSourceRequirements(options: Record<string, string | boolean>): CliResult | undefined {
+function validatePickSourceRequirements(
+  options: Record<string, string | boolean>
+): CliResult | undefined {
   if (str(options.source) === "unsplash" && !str(options.query)?.trim()) {
     return errorResult("pick", "invalid_input", "--source unsplash requires --query");
   }
@@ -264,7 +275,12 @@ export function parsePickOptions(options: Record<string, string | boolean>): Pic
 }
 
 export async function buildPickDeps(root: string, options: PickOptions): Promise<PickDeps> {
-  if ((options.source ?? "local") === "unsplash") return {};
+  if ((options.source ?? "local") === "unsplash") {
+    const userConfigPath = getUserConfigPath();
+    return {
+      resolveUnsplashCredential: () => resolveUnsplashCredential(userConfigPath)
+    };
+  }
   if (options.query === undefined) return {};
   if ((options.semantic ?? "local") === "ai") {
     try {

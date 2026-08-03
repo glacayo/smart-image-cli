@@ -11,15 +11,23 @@ export const providerConfigSchema = z
   })
   .strict();
 
+export const unsplashConfigSchema = z
+  .object({
+    accessKey: z.string().min(1).optional()
+  })
+  .strict();
+
 export const userConfigSchema = z
   .object({
     activeProvider: z.enum(["ollama", "openrouter", "gemini"]).default("ollama"),
-    providers: z.record(providerConfigSchema).default({})
+    providers: z.record(providerConfigSchema).default({}),
+    unsplash: unsplashConfigSchema.default({})
   })
   .strict();
 
 export type UserConfig = z.infer<typeof userConfigSchema>;
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
+export type UnsplashConfig = z.infer<typeof unsplashConfigSchema>;
 
 export function getUserConfigDir(env: NodeJS.ProcessEnv = process.env): string {
   if (process.platform === "win32" && env.APPDATA) {
@@ -42,5 +50,5 @@ export function parseUserConfig(value: unknown): UserConfig {
 }
 
 export function emptyUserConfig(): UserConfig {
-  return { activeProvider: "ollama", providers: {} };
+  return { activeProvider: "ollama", providers: {}, unsplash: {} };
 }
