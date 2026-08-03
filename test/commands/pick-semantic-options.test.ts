@@ -79,6 +79,44 @@ describe("pick semantic CLI options", () => {
     expect(err?.message).toContain("--semantic");
   });
 
+  it("parses and validates explicit source input", () => {
+    expect(parsePickOptions({ source: "unsplash", query: "spa hero" })).toMatchObject({
+      source: "unsplash",
+      query: "spa hero"
+    });
+    expect(validatePickEnumOption("source", "local")).toBeUndefined();
+    expect(validatePickEnumOption("source", "unsplash")).toBeUndefined();
+    const err = validatePickEnumOption("source", "remote");
+    expect(err?.reason).toBe("invalid_input");
+    expect(err?.message).toContain("--source");
+  });
+
+  it("registered command requires a query for explicit Unsplash source", async () => {
+    const result = await runPickCommand("/tmp/project", "--source", "unsplash");
+
+    expect(process.exitCode).toBe(3);
+    expect(result.reason).toBe("invalid_input");
+    expect(result.message).toContain("--source unsplash requires --query");
+    expect(pickServiceMock).not.toHaveBeenCalled();
+  });
+
+  it("registered command rejects panorama for explicit Unsplash source", async () => {
+    const result = await runPickCommand(
+      "/tmp/project",
+      "--source",
+      "unsplash",
+      "--query",
+      "wide skyline",
+      "--orientation",
+      "panorama"
+    );
+
+    expect(process.exitCode).toBe(3);
+    expect(result.reason).toBe("invalid_input");
+    expect(result.message).toContain("does not support --orientation panorama");
+    expect(pickServiceMock).not.toHaveBeenCalled();
+  });
+
   it("validates top-k as an integer in the 1..10 range", () => {
     expect(validatePickTopKOption("1")).toBeUndefined();
     expect(validatePickTopKOption("10")).toBeUndefined();

@@ -5,6 +5,7 @@ import {
   pickService,
   type PickDeps,
   type PickOptions,
+  type PickSource,
   type SemanticMode
 } from "../app/pick-service.js";
 import { buildTextRankerProvider, serviceError } from "../app/runtime.js";
@@ -27,6 +28,7 @@ const VALID_FORMATS: ReadonlySet<string> = new Set<ImageFormat>([
   "avif"
 ]);
 const VALID_SEMANTIC_MODES: ReadonlySet<string> = new Set<SemanticMode>(["local", "ai"]);
+const VALID_SOURCES: ReadonlySet<string> = new Set<PickSource>(["local", "unsplash"]);
 
 export function registerPickCommand(program: Command): void {
   program
@@ -44,6 +46,7 @@ export function registerPickCommand(program: Command): void {
     .option("--allow-reuse", "allow reuse for the same slot and location")
     .option("--query <text>", "free-text intent used to rank eligible candidates")
     .option("--semantic <mode>", "semantic ranking mode: local or ai")
+    .option("--source <source>", "image source: local or unsplash")
     .option("--top-k <n>", "number of ranking/alternative entries to emit (1..10)")
     .action(async (root: string, options: Record<string, string | boolean>, command: Command) => {
       const globals = command.optsWithGlobals<{ json?: boolean }>();
@@ -59,9 +62,15 @@ export function registerPickCommand(program: Command): void {
         process.exitCode = EXIT_CODES.INVALID_INPUT;
         return;
       }
+      const sourceErr = validatePickSourceRequirements(options);
+      if (sourceErr !== undefined) {
+        emitResult(sourceErr, { json: globals.json });
+        process.exitCode = EXIT_CODES.INVALID_INPUT;
+        return;
+      }
       try {
         const parsed = parsePickOptions(options);
-        if (parsed.query !== undefined && parsed.semantic === undefined) {
+        if ((parsed.source ?? "local") === "local" && parsed.query !== undefined && parsed.semantic === undefined) {
           process.stderr.write("smart-img pick: --query provided; defaulted to --semantic local\n");
         }
         let deps: PickDeps;
@@ -117,6 +126,28 @@ function validatePickEnums(options: Record<string, string | boolean>): CliResult
       `--semantic must be one of: ${[...VALID_SEMANTIC_MODES].join(", ")}, got: "${semantic}"`
     );
   }
+  const source = str(options.source);
+  if (source !== undefined && !VALID_SOURCES.has(source as PickSource)) {
+    return errorResult(
+      "pick",
+      "invalid_input",
+      `--source must be one of: ${[...VALID_SOURCES].join(", ")}, got: "${source}"`
+    );
+  }
+  return undefined;
+}
+
+function validatePickSourceRequirements(options: Record<string, string | boolean>): CliResult | undefined {
+  if (str(options.source) === "unsplash" && !str(options.query)?.trim()) {
+    return errorResult("pick", "invalid_input", "--source unsplash requires --query");
+  }
+  if (str(options.source) === "unsplash" && str(options.orientation) === "panorama") {
+    return errorResult(
+      "pick",
+      "invalid_input",
+      "--source unsplash does not support --orientation panorama"
+    );
+  }
   return undefined;
 }
 
@@ -130,7 +161,7 @@ export function validatePickIntOption(
 
 /** Exported for focused unit tests of enum flag validation. */
 export function validatePickEnumOption(
-  option: "orientation" | "format" | "semantic",
+  option: "orientation" | "format" | "semantic" | "source",
   value: string | undefined
 ): CliResult | undefined {
   if (value === undefined) return undefined;
@@ -139,9 +170,17 @@ export function validatePickEnumOption(
       ? VALID_ORIENTATIONS
       : option === "format"
         ? VALID_FORMATS
-        : VALID_SEMANTIC_MODES;
+        : option === "semantic"
+          ? VALID_SEMANTIC_MODES
+          : VALID_SOURCES;
   const label =
-    option === "orientation" ? "orientation" : option === "format" ? "format" : "semantic";
+    option === "orientation"
+      ? "orientation"
+      : option === "format"
+        ? "format"
+        : option === "semantic"
+          ? "semantic"
+          : "source";
   if (!valid.has(value)) {
     return errorResult(
       "pick",
@@ -217,12 +256,15 @@ export function parsePickOptions(options: Record<string, string | boolean>): Pic
   if (query) parsed.query = query;
   const semantic = str(options.semantic);
   if (semantic !== undefined) parsed.semantic = semantic as SemanticMode;
+  const source = str(options.source);
+  if (source !== undefined) parsed.source = source as PickSource;
   const topK = intOpt(options.topK);
   if (topK !== undefined) parsed.topK = topK;
   return parsed;
 }
 
 export async function buildPickDeps(root: string, options: PickOptions): Promise<PickDeps> {
+  if ((options.source ?? "local") === "unsplash") return {};
   if (options.query === undefined) return {};
   if ((options.semantic ?? "local") === "ai") {
     try {
