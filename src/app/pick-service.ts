@@ -7,7 +7,11 @@ import { SidecarStore } from "../adapters/sidecar-store.js";
 import { SharpProcessor } from "../adapters/sharp-processor.js";
 import { StorageRootGuard } from "../adapters/storage-root-guard.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
-import { UnsplashClient, UnsplashClientError, type UnsplashPhoto } from "../adapters/unsplash-client.js";
+import {
+  UnsplashClient,
+  UnsplashClientError,
+  type UnsplashPhoto
+} from "../adapters/unsplash-client.js";
 import { LocalTextRanker } from "../adapters/vision/local-text-ranker.js";
 import {
   VisionProviderError,
@@ -17,7 +21,15 @@ import {
 import { planResize, type ImageFormat } from "../domain/resize-planner.js";
 import { matchSlot, type SlotAlternative, type SlotRequest } from "../domain/slot-matcher.js";
 import { sanitizeSlug } from "../domain/slug-namer.js";
-import { appendUsage, ensureIndexReady, stableNow, type ServiceOutcome } from "./runtime.js";
+import {
+  appendUsage,
+  ensureIndexReady,
+  stableNow,
+  resolveUnsplashCredential,
+  MissingUnsplashCredentialError,
+  type ResolvedUnsplashCredential,
+  type ServiceOutcome
+} from "./runtime.js";
 
 export type SemanticMode = "local" | "ai";
 export type PickSource = "local" | "unsplash";
@@ -37,6 +49,12 @@ export type PickDeps = {
   textRanker?: TextRankerProvider;
   /** Inject an Unsplash client for tests or alternate transports. */
   unsplashClient?: Pick<UnsplashClient, "searchPhotos" | "trackDownload" | "downloadPhoto">;
+  /**
+   * Inject the Unsplash credential resolver. Production resolves env override
+   * > user config; tests inject a stub to avoid touching the real config or env.
+   * Only consulted when `unsplashClient` is not injected.
+   */
+  resolveUnsplashCredential?: () => Promise<ResolvedUnsplashCredential>;
 };
 
 type RankingBlock = {
@@ -272,7 +290,22 @@ async function pickUnsplashService(
   const format = options.format ?? "jpg";
   let photo: UnsplashPhoto | undefined;
   try {
-    const client = deps.unsplashClient ?? new UnsplashClient();
+    let client: Pick<UnsplashClient, "searchPhotos" | "trackDownload" | "downloadPhoto">;
+    if (deps.unsplashClient !== undefined) {
+      client = deps.unsplashClient;
+    } else {
+      const resolve = deps.resolveUnsplashCredential ?? resolveUnsplashCredential;
+      let credential: ResolvedUnsplashCredential;
+      try {
+        credential = await resolve();
+      } catch (error) {
+        if (error instanceof MissingUnsplashCredentialError) {
+          return missingUnsplashCredentialOutcome();
+        }
+        throw error;
+      }
+      client = new UnsplashClient({ accessKey: credential.accessKey });
+    }
     const orientation = toUnsplashOrientation(options.orientation);
     const photos = await client.searchPhotos({
       query: unsplashQuery(options, query),
@@ -319,11 +352,16 @@ async function pickUnsplashService(
     );
     if (!plan.ok) {
       return {
-        result: errorResult("pick", "no_candidate", "Unsplash image cannot satisfy request without upscaling", {
-          source: "unsplash",
-          photoId: photo.id,
-          cause: plan.reason
-        }),
+        result: errorResult(
+          "pick",
+          "no_candidate",
+          "Unsplash image cannot satisfy request without upscaling",
+          {
+            source: "unsplash",
+            photoId: photo.id,
+            cause: plan.reason
+          }
+        ),
         exitCode: EXIT_CODES.NO_MATCH
       };
     }
@@ -396,6 +434,15 @@ async function pickUnsplashService(
   }
 }
 
+function missingUnsplashCredentialOutcome(): ServiceOutcome {
+  const error = new MissingUnsplashCredentialError();
+  const guidance = error.guidance;
+  return {
+    result: errorResult("pick", guidance.reason, error.message, guidance),
+    exitCode: EXIT_CODES.PROVIDER_ERROR
+  };
+}
+
 async function usedShaForSlot(root: string, options: PickOptions): Promise<Set<string>> {
   if (options.allowReuse === true || options.slot === undefined || options.location === undefined) {
     return new Set();
@@ -431,7 +478,9 @@ function unsplashQuery(options: PickOptions, query: string): string {
   return [...new Set([query, ...categories])].join(" ");
 }
 
-function toUnsplashOrientation(orientation: PickOptions["orientation"]): "landscape" | "portrait" | "squarish" | undefined {
+function toUnsplashOrientation(
+  orientation: PickOptions["orientation"]
+): "landscape" | "portrait" | "squarish" | undefined {
   if (orientation === "landscape" || orientation === "portrait") return orientation;
   if (orientation === "square") return "squarish";
   return undefined;

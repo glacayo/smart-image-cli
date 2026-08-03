@@ -33,6 +33,14 @@ export type UnsplashPhoto = {
 };
 
 export type UnsplashClientOptions = {
+  /**
+   * Required Unsplash Access Key. Callers should resolve this through
+   * `resolveUnsplashCredential` (env override > user config) rather than
+   * reading `process.env` directly, so the persistent private setup flow is
+   * honored. Kept optional only for backwards compatibility with callers that
+   * still fall back to `UNSPLASH_ACCESS_KEY`; a missing key throws
+   * `UnsplashClientError` at construction time.
+   */
   accessKey?: string;
   fetch?: typeof fetch;
   appName?: string;
@@ -61,7 +69,9 @@ export class UnsplashClient {
   constructor(options: UnsplashClientOptions = {}) {
     const accessKey = options.accessKey ?? process.env.UNSPLASH_ACCESS_KEY;
     if (!accessKey) {
-      throw new UnsplashClientError("Missing UNSPLASH_ACCESS_KEY for Unsplash image search");
+      throw new UnsplashClientError(
+        "Missing Unsplash Access Key. Run `smart-img config unsplash setup` to configure it privately."
+      );
     }
     this.accessKey = accessKey;
     this.fetchImpl = options.fetch ?? fetch;
@@ -81,13 +91,17 @@ export class UnsplashClient {
 
     const response = await this.fetchJson(url);
     const results = Array.isArray(response.results) ? response.results : [];
-    return results.map((photo) => parsePhoto(photo, this.appName)).filter((photo) => photo !== null);
+    return results
+      .map((photo) => parsePhoto(photo, this.appName))
+      .filter((photo) => photo !== null);
   }
 
   async trackDownload(photo: UnsplashPhoto): Promise<void> {
     const location = photo.links.downloadLocation;
     if (!location) {
-      throw new UnsplashClientError(`Unsplash photo ${photo.id} did not include download tracking URL`);
+      throw new UnsplashClientError(
+        `Unsplash photo ${photo.id} did not include download tracking URL`
+      );
     }
     await this.fetchJson(new URL(location));
   }
@@ -95,13 +109,17 @@ export class UnsplashClient {
   async downloadPhoto(photo: UnsplashPhoto): Promise<Buffer> {
     const url = photo.urls.full ?? photo.urls.regular ?? photo.urls.raw;
     if (!url) {
-      throw new UnsplashClientError(`Unsplash photo ${photo.id} did not include a downloadable URL`);
+      throw new UnsplashClientError(
+        `Unsplash photo ${photo.id} did not include a downloadable URL`
+      );
     }
     let response: Response;
     try {
       response = await this.fetchImpl(url, { headers: this.headers() });
     } catch (error) {
-      throw new UnsplashClientError("Unable to download Unsplash image", undefined, { cause: error });
+      throw new UnsplashClientError("Unable to download Unsplash image", undefined, {
+        cause: error
+      });
     }
     if (!response.ok) {
       throw new UnsplashClientError(
@@ -120,7 +138,10 @@ export class UnsplashClient {
       throw new UnsplashClientError("Unable to reach Unsplash API", undefined, { cause: error });
     }
     if (!response.ok) {
-      throw new UnsplashClientError(`Unsplash API failed with HTTP ${response.status}`, response.status);
+      throw new UnsplashClientError(
+        `Unsplash API failed with HTTP ${response.status}`,
+        response.status
+      );
     }
     try {
       return (await response.json()) as UnsplashSearchResponse;

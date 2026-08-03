@@ -81,18 +81,31 @@ smart-img --json pick ./assets --category bathroom --query "bright shower" --sem
 
 Use Unsplash only when the user or agent explicitly wants a stock image instead of the local image index.
 
-```bash
-UNSPLASH_ACCESS_KEY="your_access_key" \
-  smart-img --json pick ./assets \
-  --source unsplash \
-  --query "modern spa bathroom hero" \
-  --orientation landscape \
-  --width 1600 \
-  --height 900 \
-  --slot home.hero
-```
+Unsplash requires an **Access Key** that the human must obtain and configure privately. Agents must never ask for the key in chat or handle its value.
+
+1. The human obtains an Access Key at **https://unsplash.com/developers** (Your apps → New demo application).
+2. The human runs the private setup flow once in an interactive terminal and pastes the key when prompted (it is stored in user-scoped config with restrictive file permissions, never in project config). This command is interactive/private only — there is no way to pass the key via a CLI argument:
+
+   ```bash
+   smart-img config unsplash setup
+   ```
+
+3. After setup, the agent runs `pick` with `--source unsplash`:
+
+   ```bash
+   smart-img --json pick ./assets \
+     --source unsplash \
+     --query "modern spa bathroom hero" \
+     --orientation landscape \
+     --width 1600 \
+     --height 900 \
+     --slot home.hero
+   ```
 
 - `--source unsplash` requires `--query` so the request has searchable intent.
+- `smart-img config unsplash setup` never accepts the key via process args; in non-TTY/JSON mode it returns actionable guidance telling the human to run it in a private interactive terminal.
+- The `UNSPLASH_ACCESS_KEY` environment variable is honored as an operator-managed runtime override for `pick --source unsplash` (takes precedence over user config), but it is not a setup input and must not be used to route the key through agent-controlled buffers. The persistent private setup flow above is the preferred path.
+- If no key is configured, `pick --source unsplash` returns a structured `missing_unsplash_credential` error with actionable guidance (the official URL and the private setup command) and no secret.
 - Orientation and dimensions are applied before producing the final asset; `square` maps to Unsplash's `squarish` orientation.
 - The selected image is downloaded under `.img-ia/unsplash`, resized/cropped through the normal output pipeline, and emitted under `_out`.
 - The JSON manifest includes Unsplash attribution fields (`photoId`, `photoUrl`, `photographerName`, `photographerUrl`, `attributionText`, and `attributionHtml`). Keep that attribution with any published usage.
