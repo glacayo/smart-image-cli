@@ -15,6 +15,7 @@ export { composePixabayQuery, PIXABAY_MAX_QUERY_LENGTH };
 import {
   buildTextRankerProvider,
   resolveUnsplashCredential,
+  resolvePixabayApiKey,
   serviceError
 } from "../app/runtime.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
@@ -58,11 +59,11 @@ export function registerPickCommand(program: Command): void {
     .option("--semantic <mode>", "semantic ranking mode: local or ai")
     .option(
       "--source <source>",
-      "image source: local or unsplash (pixabay accepted for CLI contract; not yet available in this build)"
+      "image source: local, unsplash, or pixabay (explicit only; no cross-source fallback)"
     )
     .option(
       "--safesearch <bool>",
-      "Pixabay safesearch true|false (default: true when --source pixabay; pick not yet available)"
+      "Pixabay safesearch true|false (default: true when --source pixabay)"
     )
     .option("--top-k <n>", "number of ranking/alternative entries to emit (1..10)")
     .action(async (root: string, options: Record<string, string | boolean>, command: Command) => {
@@ -332,9 +333,9 @@ export async function buildPickDeps(root: string, options: PickOptions): Promise
       resolveUnsplashCredential: () => resolveUnsplashCredential(userConfigPath)
     };
   }
-  // Pixabay: no local ranker/index wiring (SEL-1 no cross-source fallback). WU5b adds client deps.
+  // Pixabay: credential resolver only — never local ranker/index (SEL-1).
   if (options.source === "pixabay") {
-    return {};
+    return { resolvePixabayCredential: () => resolvePixabayApiKey(getUserConfigPath()) };
   }
   if (options.query === undefined) return {};
   if ((options.semantic ?? "local") === "ai") {

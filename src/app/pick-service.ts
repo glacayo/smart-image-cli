@@ -30,6 +30,7 @@ import {
   type ResolvedUnsplashCredential,
   type ServiceOutcome
 } from "./runtime.js";
+import { pickPixabayService, type PixabayPickDeps } from "./pixabay-pick-service.js";
 
 export type SemanticMode = "local" | "ai";
 /** External sources stay explicit; Unsplash remains until removal slices (WU6*). */
@@ -64,7 +65,7 @@ export type PickDeps = {
    * Only consulted when `unsplashClient` is not injected.
    */
   resolveUnsplashCredential?: () => Promise<ResolvedUnsplashCredential>;
-};
+} & Pick<PixabayPickDeps, "pixabayClient" | "resolvePixabayCredential" | "usedIds">;
 
 type RankingBlock = {
   status: "ranked";
@@ -96,11 +97,7 @@ export async function pickService(
   if ((options.source ?? "local") === "unsplash") {
     return pickUnsplashService(root, options, deps);
   }
-  // WU5a: never fall back to the local index for explicit pixabay.
-  // Search/download/used-ids land in WU5b (`pickPixabayService`).
-  if (options.source === "pixabay") {
-    return pixabaySourceNotWiredYet();
-  }
+  if (options.source === "pixabay") return pickPixabayService(root, options, deps);
   const sidecars = new SidecarStore(root);
   const injectedIndex = deps.index;
   const index = injectedIndex ?? new SqliteIndex(root);
@@ -501,19 +498,6 @@ export function composePixabayQuery(
     (c): c is string => typeof c === "string" && c.length > 0
   );
   return [...new Set([query, ...categories])].join(" ");
-}
-
-/** Fail closed for explicit pixabay until WU5b wires search/download (no local fallback). */
-function pixabaySourceNotWiredYet(): ServiceOutcome {
-  return {
-    result: errorResult(
-      "pick",
-      "invalid_input",
-      "Pixabay pick is not yet available in this build",
-      { source: "pixabay" }
-    ),
-    exitCode: EXIT_CODES.INVALID_INPUT
-  };
 }
 
 function toUnsplashOrientation(

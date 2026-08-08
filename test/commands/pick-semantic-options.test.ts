@@ -215,8 +215,8 @@ describe("pick semantic CLI options", () => {
       category: "interior",
       safeSearch: true
     });
-    // Explicit pixabay must not wire local ranker / local-index deps (no silent fallback).
-    expect(deps).toEqual({});
+    // Explicit pixabay wires credential resolver only — never local ranker/index.
+    expect(typeof deps?.resolvePixabayCredential).toBe("function");
     expect(deps).not.toHaveProperty("textRanker");
     expect(deps).not.toHaveProperty("index");
   });
@@ -314,7 +314,7 @@ describe("pick semantic CLI options", () => {
       query: "wide coast"
     });
 
-    // No secret flags; help names pixabay but states it is not yet available.
+    // No secret flags; help names pixabay as functional explicit source.
     const program = new Command().exitOverride().option("--json");
     registerPickCommand(program);
     const pick = program.commands.find((c) => c.name() === "pick");
@@ -324,27 +324,7 @@ describe("pick semantic CLI options", () => {
     expect(flags).not.toMatch(/access[-]?key/i);
     expect(flags).toContain("--safesearch");
     expect(help).toMatch(/pixabay/i);
-    expect(help).toMatch(/not yet available/i);
-  });
-
-  it("real unmocked pickService returns invalid_input exit 3 for pixabay (not provider_error)", async () => {
-    // Bypass the file-level pickService mock; WU5a keeps the source plug-in unwired until WU5b.
-    const { pickService } = await vi.importActual<typeof import("../../src/app/pick-service.js")>(
-      "../../src/app/pick-service.js"
-    );
-    const outcome = await pickService("/tmp/project", {
-      source: "pixabay",
-      query: "kitchen",
-      safeSearch: true
-    });
-    expect(outcome.exitCode).toBe(3);
-    expect(outcome.result.ok).toBe(false);
-    expect(outcome.result.reason).toBe("invalid_input");
-    expect(outcome.result.message).toBe("Pixabay pick is not yet available in this build");
-    expect(outcome.result.reason).not.toBe("provider_error");
-    expect(outcome.exitCode).not.toBe(4);
-    // Mock remains in place for other tests in this file.
-    expect(pickServiceMock).not.toHaveBeenCalled();
+    expect(help).toMatch(/no cross-source fallback/i);
   });
 
   it("does not build local ranker deps for pixabay even when semantic is set", async () => {
@@ -353,7 +333,7 @@ describe("pick semantic CLI options", () => {
         "/tmp/project",
         parsePickOptions({ source: "pixabay", query: "kitchen", semantic: "local" })
       )
-    ).resolves.toEqual({});
+    ).resolves.toMatchObject({ resolvePixabayCredential: expect.any(Function) });
     expect(buildTextRankerProviderMock).not.toHaveBeenCalled();
   });
 });
