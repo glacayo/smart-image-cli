@@ -7,12 +7,18 @@ import { SidecarStore } from "../adapters/sidecar-store.js";
 import { SharpProcessor } from "../adapters/sharp-processor.js";
 import { StorageRootGuard } from "../adapters/storage-root-guard.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
-import {
-  UnsplashClient,
-  UnsplashClientError,
-  type UnsplashPhoto
-} from "../adapters/unsplash-client.js";
 import { LocalTextRanker } from "../adapters/vision/local-text-ranker.js";
+// Residual Unsplash port until WU6c removes the source enum.
+type UnsplashPhoto = {
+  id: string; width: number; height: number; urls: Record<string, string | undefined>;
+  links: { html?: string; downloadLocation?: string }; photographerName: string;
+  photographerUsername?: string; photographerUrl?: string; attributionText: string; attributionHtml: string;
+  description?: string; altDescription?: string;
+};
+type UnsplashClientPort = {
+  searchPhotos: (o: { query: string; orientation?: string; perPage?: number }) => Promise<UnsplashPhoto[]>;
+  trackDownload: (p: UnsplashPhoto) => Promise<void>; downloadPhoto: (p: UnsplashPhoto) => Promise<Buffer>;
+};
 import {
   VisionProviderError,
   type RankingEntry,
@@ -25,8 +31,6 @@ import {
   appendUsage,
   ensureIndexReady,
   stableNow,
-  resolveUnsplashCredential,
-  MissingUnsplashCredentialError,
   type ResolvedUnsplashCredential,
   type ServiceOutcome
 } from "./runtime.js";
@@ -57,13 +61,9 @@ export type PickDeps = {
   index?: SqliteIndex;
   /** Inject a semantic text ranker. Required by command wiring for AI mode; local mode falls back to LocalTextRanker. */
   textRanker?: TextRankerProvider;
-  /** Inject an Unsplash client for tests or alternate transports. */
-  unsplashClient?: Pick<UnsplashClient, "searchPhotos" | "trackDownload" | "downloadPhoto">;
-  /**
-   * Inject the Unsplash credential resolver. Production resolves env override
-   * > user config; tests inject a stub to avoid touching the real config or env.
-   * Only consulted when `unsplashClient` is not injected.
-   */
+  /** Test double only — production Unsplash HTTP client removed (WU6a). */
+  unsplashClient?: UnsplashClientPort;
+  /** Legacy injector; ignored unless `unsplashClient` is also provided. */
   resolveUnsplashCredential?: () => Promise<ResolvedUnsplashCredential>;
 } & Pick<PixabayPickDeps, "pixabayClient" | "resolvePixabayCredential" | "usedIds">;
 
@@ -301,22 +301,16 @@ async function pickUnsplashService(
   const format = options.format ?? "jpg";
   let photo: UnsplashPhoto | undefined;
   try {
-    let client: Pick<UnsplashClient, "searchPhotos" | "trackDownload" | "downloadPhoto">;
-    if (deps.unsplashClient !== undefined) {
-      client = deps.unsplashClient;
-    } else {
-      const resolve = deps.resolveUnsplashCredential ?? resolveUnsplashCredential;
-      let credential: ResolvedUnsplashCredential;
-      try {
-        credential = await resolve();
-      } catch (error) {
-        if (error instanceof MissingUnsplashCredentialError) {
-          return missingUnsplashCredentialOutcome();
-        }
-        throw error;
-      }
-      client = new UnsplashClient({ accessKey: credential.accessKey });
+    // WU6a: adapter deleted — production fails closed (no setup/migration guidance).
+    if (deps.unsplashClient === undefined) {
+      return {
+        result: errorResult("pick", "invalid_input", "Unsplash source is not available", {
+          source: "unsplash"
+        }),
+        exitCode: EXIT_CODES.INVALID_INPUT
+      };
     }
+    const client = deps.unsplashClient;
     const orientation = toUnsplashOrientation(options.orientation);
     const photos = await client.searchPhotos({
       query: unsplashQuery(options, query),
@@ -432,26 +426,16 @@ async function pickUnsplashService(
       exitCode: EXIT_CODES.SUCCESS
     };
   } catch (error) {
-    if (error instanceof UnsplashClientError) {
-      return {
-        result: errorResult("pick", "provider_error", defaultSecretRedactor.mask(error.message), {
-          source: "unsplash",
-          status: error.status
-        }),
-        exitCode: EXIT_CODES.PROVIDER_ERROR
-      };
-    }
-    throw error;
+    if (!(error instanceof Error)) throw error;
+    const status = (error as Error & { status?: unknown }).status;
+    return {
+      result: errorResult("pick", "provider_error", defaultSecretRedactor.mask(error.message), {
+        source: "unsplash",
+        ...(typeof status === "number" ? { status } : {})
+      }),
+      exitCode: EXIT_CODES.PROVIDER_ERROR
+    };
   }
-}
-
-function missingUnsplashCredentialOutcome(): ServiceOutcome {
-  const error = new MissingUnsplashCredentialError();
-  const guidance = error.guidance;
-  return {
-    result: errorResult("pick", guidance.reason, error.message, guidance),
-    exitCode: EXIT_CODES.PROVIDER_ERROR
-  };
 }
 
 async function usedShaForSlot(root: string, options: PickOptions): Promise<Set<string>> {

@@ -20,13 +20,9 @@ async function tempRoot(): Promise<string> {
 }
 
 describe("pickService --source unsplash credential wiring", () => {
-  it("returns missing_unsplash_credential guidance with no secret when no client/resolver is injected and config/env are empty", async () => {
+  it("fails closed without Unsplash setup guidance when no client double is injected", async () => {
     const root = await tempRoot();
-    // No env and no user config: resolveUnsplashCredential will throw.
     vi.stubEnv("UNSPLASH_ACCESS_KEY", "");
-    // Point getUserConfigPath-derived resolution at an empty temp dir by
-    // stubbing APPDATA/XDG_CONFIG_HOME so resolveUnsplashCredential reads
-    // an empty config.json (ENOENT → empty config → no key).
     const configHome = await fs.mkdtemp(path.join(os.tmpdir(), "smart-image-unsplash-pick-home-"));
     roots.push(configHome);
     vi.stubEnv("APPDATA", configHome);
@@ -40,20 +36,13 @@ describe("pickService --source unsplash credential wiring", () => {
       height: 400
     });
 
-    expect(outcome.exitCode).toBe(4);
-    expect(outcome.result.reason).toBe("missing_unsplash_credential");
-    const details = outcome.result.details as {
-      reason: string;
-      obtain: string;
-      setupCommand: string;
-      retry: string;
-    };
-    expect(details.obtain).toContain("https://unsplash.com/developers");
-    expect(details.setupCommand).toContain("smart-img config unsplash setup");
-    expect(details.retry).toContain("smart-img pick --source unsplash");
-    const blob = JSON.stringify(outcome.result);
-    expect(blob).not.toContain("access_key");
-    expect(blob).not.toContain("UNSPLASH_ACCESS_KEY");
+    expect(outcome.exitCode).toBe(3);
+    expect(outcome.result.reason).toBe("invalid_input");
+    expect(outcome.result.message).toMatch(/unsplash/i);
+    expect(outcome.result.message).not.toMatch(/config unsplash setup|unsplash\.com\/developers/i);
+    expect(JSON.stringify(outcome.result)).not.toMatch(
+      /access_key|UNSPLASH_ACCESS_KEY|missing_unsplash_credential/
+    );
   });
 
   it("uses the injected resolveUnsplashCredential to construct the UnsplashClient", async () => {
@@ -121,15 +110,12 @@ describe("pickService --source unsplash credential wiring", () => {
         { resolveUnsplashCredential: resolver }
       );
 
-      expect(outcome.exitCode).toBe(0);
-      expect(resolver).toHaveBeenCalledOnce();
-      const searchCall = fetchImpl.mock.calls.find((c) => String(c[0]).includes("/search/photos"));
-      expect(searchCall).toBeDefined();
-      const headers = (searchCall![1] as RequestInit | undefined)?.headers as
-        Record<string, string> | undefined;
-      expect(headers?.Authorization).toBe(`Client-ID ${resolvedKey}`);
-      const manifest = (outcome.result.details as { manifest: { source: string } }).manifest;
-      expect(manifest.source).toBe("unsplash");
+      // WU6a: resolver alone cannot construct a removed UnsplashClient.
+      expect(outcome.exitCode).toBe(3);
+      expect(outcome.result.reason).toBe("invalid_input");
+      expect(resolver).not.toHaveBeenCalled();
+      expect(fetchImpl).not.toHaveBeenCalled();
+      void resolvedKey;
     } finally {
       globalThis.fetch = originalFetch;
     }
