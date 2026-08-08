@@ -31,7 +31,6 @@ import {
   appendUsage,
   ensureIndexReady,
   stableNow,
-  type ResolvedUnsplashCredential,
   type ServiceOutcome
 } from "./runtime.js";
 import { pickPixabayService, type PixabayPickDeps } from "./pixabay-pick-service.js";
@@ -61,10 +60,10 @@ export type PickDeps = {
   index?: SqliteIndex;
   /** Inject a semantic text ranker. Required by command wiring for AI mode; local mode falls back to LocalTextRanker. */
   textRanker?: TextRankerProvider;
-  /** Test double only — production Unsplash HTTP client removed (WU6a). */
+  /** Test double only — production Unsplash HTTP client removed (WU6a); full enum teardown is WU6c2. */
   unsplashClient?: UnsplashClientPort;
-  /** Legacy injector; ignored unless `unsplashClient` is also provided. */
-  resolveUnsplashCredential?: () => Promise<ResolvedUnsplashCredential>;
+  /** Legacy injector; ignored (credential resolver removed WU6c1). */
+  resolveUnsplashCredential?: () => Promise<{ accessKey: string; source: "env" | "user-config" }>;
 } & Pick<PixabayPickDeps, "pixabayClient" | "resolvePixabayCredential" | "usedIds">;
 
 type RankingBlock = {

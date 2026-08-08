@@ -96,7 +96,7 @@ describe("unsplash setup/config surface removed (WU6b2)", () => {
     expect(prompter.password).not.toHaveBeenCalled();
 
     const persisted = await readUserConfig(configPath);
-    expect(persisted.unsplash.accessKey).toBeUndefined();
+    expect(persisted).not.toHaveProperty("unsplash");
     expect(persisted.pixabay.apiKey).toBeUndefined();
   });
 
@@ -104,7 +104,6 @@ describe("unsplash setup/config surface removed (WU6b2)", () => {
     const configPath = await tempConfigPath({
       activeProvider: "ollama",
       providers: {},
-      unsplash: {},
       pixabay: {}
     });
     const userSet = await configService("set", "unsplash.accessKey", setSecret, {
@@ -115,7 +114,7 @@ describe("unsplash setup/config surface removed (WU6b2)", () => {
     expect(blobOf(userSet)).not.toContain(setSecret);
     noUnsplashGuidance(blobOf(userSet));
     const afterUser = await readUserConfig(configPath);
-    expect(afterUser.unsplash.accessKey).toBeUndefined();
+    expect(afterUser).not.toHaveProperty("unsplash");
 
     const whole = await configService("set", "unsplash", JSON.stringify({ accessKey: setSecret }), {
       userConfigPath: configPath
@@ -123,7 +122,7 @@ describe("unsplash setup/config surface removed (WU6b2)", () => {
     expect(whole.exitCode).toBe(3);
     expect(blobOf(whole)).not.toContain(setSecret);
     noUnsplashGuidance(blobOf(whole));
-    expect((await readUserConfig(configPath)).unsplash.accessKey).toBeUndefined();
+    expect(await readUserConfig(configPath)).not.toHaveProperty("unsplash");
 
     const root = await tempProjectRoot();
     const projectSet = await configService("set", "unsplash.accessKey", setSecret, {
@@ -136,7 +135,7 @@ describe("unsplash setup/config surface removed (WU6b2)", () => {
     await expect(fs.access(path.join(root, ".img-ia", "config.json"))).rejects.toBeTruthy();
   });
 
-  it("legacy unsplash.accessKey stays inert: preserved, not migrated, list redacts, setup dead", async () => {
+  it("legacy unsplash.accessKey stays inert: on-disk preserved, stripped from list/get, not migrated", async () => {
     const configPath = await tempConfigPath({
       activeProvider: "ollama",
       providers: {},
@@ -147,8 +146,15 @@ describe("unsplash setup/config surface removed (WU6b2)", () => {
     const list = await configService("list", undefined, undefined, { userConfigPath: configPath });
     expect(list.exitCode).toBe(0);
     const listBlob = blobOf(list);
-    // List must never echo the raw Access Key (shape redactor may truncate rather than [REDACTED]).
     expect(listBlob).not.toContain(legacyKey);
+    expect(listBlob).not.toMatch(/"unsplash"/);
+
+    const got = await configService("get", "unsplash.accessKey", undefined, {
+      userConfigPath: configPath
+    });
+    expect(got.exitCode).toBe(0);
+    expect(blobOf(got)).not.toContain(legacyKey);
+    expect(JSON.stringify(got.result)).not.toContain(legacyKey);
 
     const setup = await configService("unsplash", "setup", undefined, {
       userConfigPath: configPath,
@@ -166,9 +172,10 @@ describe("unsplash setup/config surface removed (WU6b2)", () => {
     };
     expect(onDisk.unsplash?.accessKey).toBe(legacyKey);
     expect(onDisk.pixabay?.apiKey).toBeUndefined();
+    expect(await readUserConfig(configPath)).not.toHaveProperty("unsplash");
   });
 
-  it("Pixabay private setup + set-block remain intact beside Unsplash removal", async () => {
+  it("Pixabay private setup + set-block remain intact; legacy unsplash stays on disk only", async () => {
     const configPath = await tempConfigPath({
       activeProvider: "ollama",
       providers: {},
@@ -194,7 +201,14 @@ describe("unsplash setup/config surface removed (WU6b2)", () => {
 
     const persisted = await readUserConfig(configPath);
     expect(persisted.pixabay.apiKey).toBe(pixabayKey);
-    expect(persisted.unsplash.accessKey).toBe(legacyKey);
+    expect(persisted).not.toHaveProperty("unsplash");
+    expect(JSON.stringify(persisted)).not.toContain(legacyKey);
+    const onDisk = JSON.parse(await fs.readFile(configPath, "utf8")) as {
+      unsplash?: { accessKey?: string };
+      pixabay?: { apiKey?: string };
+    };
+    expect(onDisk.unsplash?.accessKey).toBe(legacyKey);
+    expect(onDisk.pixabay?.apiKey).toBe(pixabayKey);
 
     const blocked = await configService("set", "pixabay.apiKey", "other-pixabay-secret-zzzz", {
       userConfigPath: configPath

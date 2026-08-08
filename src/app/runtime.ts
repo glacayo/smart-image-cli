@@ -167,51 +167,23 @@ export async function writeUserConfig(
   configPath = getUserConfigPath()
 ): Promise<void> {
   await fs.mkdir(path.dirname(configPath), { recursive: true });
-  await fs.writeFile(configPath, `${JSON.stringify(parseUserConfig(config), null, 2)}\n`, {
-    mode: 0o600
-  });
+  const parsed = parseUserConfig(config);
+  // Preserve legacy on-disk `unsplash` only; never re-introduce from normalized config.
+  const existing = await readJsonIfExists(configPath);
+  const payload: Record<string, unknown> = { ...parsed };
+  if (
+    existing !== undefined &&
+    typeof existing === "object" &&
+    existing !== null &&
+    !Array.isArray(existing) &&
+    "unsplash" in existing
+  ) {
+    payload.unsplash = (existing as Record<string, unknown>).unsplash;
+  }
+  await fs.writeFile(configPath, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
 }
-
-export type ResolvedUnsplashCredential = {
-  accessKey: string;
-  source: "env" | "user-config";
-};
 
 export type ResolvedPixabayCredential = { apiKey: string; source: "env" | "user-config" };
-
-/**
- * Resolves the Unsplash Access Key with explicit precedence:
- *
- * 1. `UNSPLASH_ACCESS_KEY` environment variable — explicit override for
- *    automation/CI; never persisted by the CLI.
- * 2. User-scoped config `unsplash.accessKey` — the persistent private flow
- *    written by `smart-img config unsplash setup`.
- *
- * Project config is intentionally never consulted: project config rejects
- * secret-looking values at parse time, and credentials must not leak into
- * repository-controlled files.
- *
- * Throws `MissingUnsplashCredentialError` when neither source provides a key
- * so callers (`pick --source unsplash`, `UnsplashClient`) can surface a
- * structured, actionable, secret-free error.
- */
-export async function resolveUnsplashCredential(
-  configPath: string = getUserConfigPath(),
-  env: NodeJS.ProcessEnv = process.env
-): Promise<ResolvedUnsplashCredential> {
-  const envKey = typeof env.UNSPLASH_ACCESS_KEY === "string" ? env.UNSPLASH_ACCESS_KEY.trim() : "";
-  if (envKey.length > 0) {
-    return { accessKey: envKey, source: "env" };
-  }
-
-  const user = await readUserConfig(configPath);
-  const configKey = user.unsplash.accessKey?.trim();
-  if (configKey && configKey.length > 0) {
-    return { accessKey: configKey, source: "user-config" };
-  }
-
-  throw new MissingUnsplashCredentialError();
-}
 
 /** Resolve Pixabay key: `PIXABAY_API_KEY` env > user-config `pixabay.apiKey`. */
 export async function resolvePixabayApiKey(
@@ -225,34 +197,6 @@ export async function resolvePixabayApiKey(
   if (configKey && configKey.length > 0) return { apiKey: configKey, source: "user-config" };
 
   throw new MissingPixabayCredentialError();
-}
-
-/**
- * Structured error thrown when `--source unsplash` is used without a
- * configured Access Key. Carries actionable, secret-free guidance so the
- * CLI/service layer can emit it verbatim without inventing instructions.
- */
-export class MissingUnsplashCredentialError extends Error {
-  constructor() {
-    super("Unsplash Access Key is not configured.");
-    this.name = "MissingUnsplashCredentialError";
-  }
-
-  get guidance(): {
-    reason: "missing_unsplash_credential";
-    obtain: string;
-    setupCommand: string;
-    retry: string;
-  } {
-    return {
-      reason: "missing_unsplash_credential",
-      obtain:
-        "Obtain an Unsplash Access Key at https://unsplash.com/developers (Your apps → New demo application).",
-      setupCommand:
-        "Run `smart-img config unsplash setup` in a private terminal and paste the key when prompted.",
-      retry: "Retry `smart-img pick --source unsplash` after setup completes."
-    };
-  }
 }
 
 /** Thrown when pick/source pixabay has no env or user-config key. */

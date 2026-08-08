@@ -10,6 +10,7 @@ import {
 import { readUserConfig, writeUserConfig } from "../../src/app/runtime.js";
 
 const roots: string[] = [];
+const legacyKey = "legacy-unsplash-access-key-ABCDEF0123456789";
 
 afterEach(async () => {
   await Promise.all(roots.map((root) => fs.rm(root, { recursive: true, force: true })));
@@ -26,84 +27,67 @@ async function tempConfigPath(initial?: unknown): Promise<string> {
   return configPath;
 }
 
-describe("user-config unsplash schema", () => {
-  it("defaults unsplash to {} when absent", () => {
+describe("user-config legacy unsplash strip (WU6c1)", () => {
+  it("normalized config has no unsplash field; empty defaults pixabay only", () => {
     const cfg = parseUserConfig({ activeProvider: "ollama", providers: {} });
-    expect(cfg.unsplash).toEqual({});
-  });
-
-  it("parses an unsplash.accessKey entry", () => {
-    const cfg = parseUserConfig({
-      activeProvider: "ollama",
-      providers: {},
-      unsplash: { accessKey: "a-real-key-value-1234567890abcdef" }
-    });
-    expect(cfg.unsplash.accessKey).toBe("a-real-key-value-1234567890abcdef");
-  });
-
-  it("rejects unknown unsplash fields (strict)", () => {
-    expect(() =>
-      parseUserConfig({
-        activeProvider: "ollama",
-        providers: {},
-        unsplash: { accessKey: "k", extra: 1 }
-      })
-    ).toThrow();
-  });
-
-  it("emptyUserConfig includes unsplash: {} and pixabay: {}", () => {
+    expect(cfg).not.toHaveProperty("unsplash");
+    expect(cfg.pixabay).toEqual({});
     expect(emptyUserConfig()).toEqual({
       activeProvider: "ollama",
       providers: {},
-      unsplash: {},
       pixabay: {}
     });
+    expect(getUserConfigPath().endsWith(path.join("smart-image-cli", "config.json"))).toBe(true);
   });
 
-  it("round-trips unsplash.accessKey through writeUserConfig/readUserConfig", async () => {
-    const configPath = await tempConfigPath();
-    await writeUserConfig(
-      {
-        activeProvider: "ollama",
-        providers: {},
-        unsplash: { accessKey: "persisted-key-1234567890abcdef" }
-      },
-      configPath
-    );
-    const persisted = await readUserConfig(configPath);
-    expect(persisted.unsplash.accessKey).toBe("persisted-key-1234567890abcdef");
-
-    // File must be written with mode 0600 on POSIX; on Windows the mode bit is
-    // not meaningful, but the file must exist and be parseable JSON.
-    const raw = await fs.readFile(configPath, "utf8");
-    expect(raw).toContain("unsplash");
-    expect(raw).toContain("persisted-key-1234567890abcdef");
+  it("strips legacy unsplash on parse without crash or key leakage into normalized output", () => {
+    const key = "a-real-key-value-1234567890abcdef";
+    const cfg = parseUserConfig({
+      activeProvider: "ollama",
+      providers: {},
+      unsplash: { accessKey: key },
+      pixabay: {}
+    });
+    expect(cfg).not.toHaveProperty("unsplash");
+    expect(JSON.stringify(cfg)).not.toContain(key);
+    expect(cfg.pixabay).toEqual({});
   });
 
-  it("preserves existing providers when unsplash is added", async () => {
+  it("readUserConfig strips legacy block; write preserves on-disk unsplash and never migrates to pixabay", async () => {
     const configPath = await tempConfigPath({
       activeProvider: "ollama",
       providers: {
-        ollama: {
-          provider: "ollama",
-          apiKey: "existing-ollama-key-1234567890",
-          model: "minimax-m3"
-        }
-      }
+        ollama: { provider: "ollama", apiKey: "existing-ollama-key-1234567890", model: "minimax-m3" }
+      },
+      unsplash: { accessKey: legacyKey },
+      pixabay: {}
     });
-    const current = await readUserConfig(configPath);
-    await writeUserConfig(
-      { ...current, unsplash: { accessKey: "new-unsplash-key-1234567890" } },
-      configPath
-    );
-    const persisted = await readUserConfig(configPath);
-    expect(persisted.providers.ollama?.apiKey).toBe("existing-ollama-key-1234567890");
-    expect(persisted.providers.ollama?.model).toBe("minimax-m3");
-    expect(persisted.unsplash.accessKey).toBe("new-unsplash-key-1234567890");
+
+    const normalized = await readUserConfig(configPath);
+    expect(normalized).not.toHaveProperty("unsplash");
+    expect(JSON.stringify(normalized)).not.toContain(legacyKey);
+    expect(normalized.providers.ollama?.apiKey).toBe("existing-ollama-key-1234567890");
+
+    await writeUserConfig({ ...normalized, pixabay: { apiKey: "pixabay-api-key-1234567890abcdef" } }, configPath);
+
+    const after = await readUserConfig(configPath);
+    expect(after).not.toHaveProperty("unsplash");
+    expect(after.pixabay.apiKey).toBe("pixabay-api-key-1234567890abcdef");
+    expect(JSON.stringify(after)).not.toContain(legacyKey);
+
+    const onDisk = JSON.parse(await fs.readFile(configPath, "utf8")) as {
+      unsplash?: { accessKey?: string };
+      pixabay?: { apiKey?: string };
+    };
+    expect(onDisk.unsplash?.accessKey).toBe(legacyKey);
+    expect(onDisk.pixabay?.apiKey).toBe("pixabay-api-key-1234567890abcdef");
   });
 
-  it("getUserConfigPath is stable and appends config.json", () => {
-    const p = getUserConfigPath();
-    expect(p.endsWith(path.join("smart-image-cli", "config.json"))).toBe(true);
+  it("writeUserConfig does not invent unsplash when none existed on disk", async () => {
+    const configPath = await tempConfigPath();
+    await writeUserConfig({ activeProvider: "ollama", providers: {}, pixabay: {} }, configPath);
+    const raw = await fs.readFile(configPath, "utf8");
+    expect(raw).not.toContain("unsplash");
+    expect(await readUserConfig(configPath)).not.toHaveProperty("unsplash");
   });
 });

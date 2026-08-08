@@ -14,7 +14,6 @@ import {
 export { composePixabayQuery, PIXABAY_MAX_QUERY_LENGTH };
 import {
   buildTextRankerProvider,
-  resolveUnsplashCredential,
   resolvePixabayApiKey,
   serviceError
 } from "../app/runtime.js";
@@ -327,11 +326,9 @@ export function parsePickOptions(options: Record<string, string | boolean>): Pic
 }
 
 export async function buildPickDeps(root: string, options: PickOptions): Promise<PickDeps> {
+  // Residual unsplash enum until WU6c2: no credential wiring (resolver removed).
   if ((options.source ?? "local") === "unsplash") {
-    const userConfigPath = getUserConfigPath();
-    return {
-      resolveUnsplashCredential: () => resolveUnsplashCredential(userConfigPath)
-    };
+    return {};
   }
   // Pixabay: credential resolver only — never local ranker/index (SEL-1).
   if (options.source === "pixabay") {
