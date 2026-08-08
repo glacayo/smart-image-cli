@@ -51,11 +51,12 @@ describe("user-config unsplash schema", () => {
     ).toThrow();
   });
 
-  it("emptyUserConfig includes unsplash: {}", () => {
+  it("emptyUserConfig includes unsplash: {} and pixabay: {}", () => {
     expect(emptyUserConfig()).toEqual({
       activeProvider: "ollama",
       providers: {},
-      unsplash: {}
+      unsplash: {},
+      pixabay: {}
     });
   });
 

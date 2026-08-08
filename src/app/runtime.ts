@@ -15,7 +15,8 @@ import {
   parseUserConfig,
   emptyUserConfig,
   type ProviderConfig,
-  type UserConfig
+  type UserConfig,
+  type UserConfigInput
 } from "../config/user-config.js";
 import { resolveInside } from "../domain/path-guard.js";
 import { createTaxonomy, type Taxonomy } from "../domain/taxonomy.js";
@@ -162,7 +163,7 @@ function normalizeProviderEndpoint(endpoint: string): string {
 }
 
 export async function writeUserConfig(
-  config: UserConfig,
+  config: UserConfig | UserConfigInput,
   configPath = getUserConfigPath()
 ): Promise<void> {
   await fs.mkdir(path.dirname(configPath), { recursive: true });
@@ -175,6 +176,8 @@ export type ResolvedUnsplashCredential = {
   accessKey: string;
   source: "env" | "user-config";
 };
+
+export type ResolvedPixabayCredential = { apiKey: string; source: "env" | "user-config" };
 
 /**
  * Resolves the Unsplash Access Key with explicit precedence:
@@ -210,6 +213,20 @@ export async function resolveUnsplashCredential(
   throw new MissingUnsplashCredentialError();
 }
 
+/** Resolve Pixabay key: `PIXABAY_API_KEY` env > user-config `pixabay.apiKey`. */
+export async function resolvePixabayApiKey(
+  configPath: string = getUserConfigPath(),
+  env: NodeJS.ProcessEnv = process.env
+): Promise<ResolvedPixabayCredential> {
+  const envKey = typeof env.PIXABAY_API_KEY === "string" ? env.PIXABAY_API_KEY.trim() : "";
+  if (envKey.length > 0) return { apiKey: envKey, source: "env" };
+
+  const configKey = (await readUserConfig(configPath)).pixabay.apiKey?.trim();
+  if (configKey && configKey.length > 0) return { apiKey: configKey, source: "user-config" };
+
+  throw new MissingPixabayCredentialError();
+}
+
 /**
  * Structured error thrown when `--source unsplash` is used without a
  * configured Access Key. Carries actionable, secret-free guidance so the
@@ -235,6 +252,22 @@ export class MissingUnsplashCredentialError extends Error {
         "Run `smart-img config unsplash setup` in a private terminal and paste the key when prompted.",
       retry: "Retry `smart-img pick --source unsplash` after setup completes."
     };
+  }
+}
+
+/** Thrown when pick/source pixabay has no env or user-config key. */
+export class MissingPixabayCredentialError extends Error {
+  readonly guidance = {
+    reason: "missing_pixabay_credential" as const,
+    obtain: "Obtain a Pixabay API key at https://pixabay.com/api/docs/.",
+    setupCommand:
+      "Run `smart-img config pixabay setup` in a private terminal and paste the key when prompted.",
+    retry: "Retry `smart-img pick --source pixabay` after setup completes."
+  };
+
+  constructor() {
+    super("Pixabay API key is not configured.");
+    this.name = "MissingPixabayCredentialError";
   }
 }
 

@@ -17,17 +17,26 @@ export const unsplashConfigSchema = z
   })
   .strict();
 
+export const pixabayConfigSchema = z
+  .object({
+    apiKey: z.string().min(1).optional()
+  })
+  .strict();
+
 export const userConfigSchema = z
   .object({
     activeProvider: z.enum(["ollama", "openrouter", "gemini"]).default("ollama"),
     providers: z.record(providerConfigSchema).default({}),
-    unsplash: unsplashConfigSchema.default({})
+    unsplash: unsplashConfigSchema.default({}),
+    pixabay: pixabayConfigSchema.default({})
   })
   .strict();
 
 export type UserConfig = z.infer<typeof userConfigSchema>;
+export type UserConfigInput = z.input<typeof userConfigSchema>;
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 export type UnsplashConfig = z.infer<typeof unsplashConfigSchema>;
+export type PixabayConfig = z.infer<typeof pixabayConfigSchema>;
 
 export function getUserConfigDir(env: NodeJS.ProcessEnv = process.env): string {
   if (process.platform === "win32" && env.APPDATA) {
@@ -50,5 +59,5 @@ export function parseUserConfig(value: unknown): UserConfig {
 }
 
 export function emptyUserConfig(): UserConfig {
-  return { activeProvider: "ollama", providers: {}, unsplash: {} };
+  return parseUserConfig({});
 }

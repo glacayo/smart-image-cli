@@ -33,6 +33,7 @@ import {
   unsplashSetupService,
   type UnsplashSetupServiceOptions
 } from "./unsplash-setup-service.js";
+import { pixabaySetupService } from "./pixabay-setup-service.js";
 import type { Prompter } from "../cli/prompter.js";
 
 const SECRET_KEY_NAME = /(api[-_]?key|authorization|bearer|token|secret|password|credential)/i;
@@ -141,6 +142,9 @@ export async function configService(
       if (isUnsplashConfigKey(key)) {
         return unsplashSetBlocked();
       }
+      if (isPixabayConfigKey(key)) {
+        return pixabaySetBlocked();
+      }
       try {
         const next = setPath(
           structuredClone(current) as Record<string, unknown>,
@@ -190,6 +194,19 @@ export async function configService(
     };
     return unsplashSetupService(unsplashOptions);
   }
+  if (action === "pixabay" && key === "setup") {
+    // Shared optional [value] positional must not accept argv secrets.
+    // Reject any defined value before the private prompt; never inspect it.
+    if (value !== undefined) {
+      return pixabaySetBlocked();
+    }
+    return pixabaySetupService({
+      ...(userConfigPath !== undefined ? { userConfigPath } : {}),
+      ...(options.prompter !== undefined ? { prompter: options.prompter } : {}),
+      ...(options.isTty !== undefined ? { isTty: options.isTty } : {}),
+      ...(options.stderr !== undefined ? { stderr: options.stderr } : {})
+    });
+  }
   if (action === "models") {
     return listProviderModels(current, options);
   }
@@ -218,6 +235,9 @@ export async function configService(
   if (action === "set" && key && value !== undefined) {
     if (isUnsplashConfigKey(key)) {
       return unsplashSetBlocked();
+    }
+    if (isPixabayConfigKey(key)) {
+      return pixabaySetBlocked();
     }
     try {
       const next = setPath(
@@ -440,6 +460,26 @@ function unsplashSetBlocked(): ServiceOutcome {
         reason: "missing_unsplash_credential",
         setupCommand:
           "Run `smart-img config unsplash setup` in a private interactive terminal and paste the key when prompted."
+      }
+    ),
+    exitCode: EXIT_CODES.INVALID_INPUT
+  };
+}
+
+function isPixabayConfigKey(dottedKey: string): boolean {
+  return (dottedKey.split(".", 1)[0] ?? "") === "pixabay";
+}
+
+function pixabaySetBlocked(): ServiceOutcome {
+  return {
+    result: errorResult(
+      "config",
+      "invalid_input",
+      "Pixabay API key must be configured through the private interactive prompt. Run `smart-img config pixabay setup` in a private terminal.",
+      {
+        reason: "missing_pixabay_credential",
+        setupCommand:
+          "Run `smart-img config pixabay setup` in a private interactive terminal and paste the key when prompted."
       }
     ),
     exitCode: EXIT_CODES.INVALID_INPUT
