@@ -29,10 +29,6 @@ import {
   type ServiceOutcome
 } from "./runtime.js";
 import { setupService, type SetupServiceOptions } from "./setup-service.js";
-import {
-  unsplashSetupService,
-  type UnsplashSetupServiceOptions
-} from "./unsplash-setup-service.js";
 import { pixabaySetupService } from "./pixabay-setup-service.js";
 import type { Prompter } from "../cli/prompter.js";
 
@@ -185,15 +181,8 @@ export async function configService(
     };
     return setupService(setupOptions);
   }
-  if (action === "unsplash" && key === "setup") {
-    const unsplashOptions: UnsplashSetupServiceOptions = {
-      ...(userConfigPath !== undefined ? { userConfigPath } : {}),
-      ...(options.prompter !== undefined ? { prompter: options.prompter } : {}),
-      ...(options.isTty !== undefined ? { isTty: options.isTty } : {}),
-      ...(options.stderr !== undefined ? { stderr: options.stderr } : {})
-    };
-    return unsplashSetupService(unsplashOptions);
-  }
+  // Unsplash setup dispatch removed (WU6b1). Service module retained until WU6b2.
+  // `config unsplash setup` falls through to generic invalid_input (no guidance).
   if (action === "pixabay" && key === "setup") {
     // Shared optional [value] positional must not accept argv secrets.
     // Reject any defined value before the private prompt; never inspect it.
@@ -574,7 +563,7 @@ function invalid(): ServiceOutcome {
     result: errorResult(
       "config",
       "invalid_input",
-      "Expected config list|get <key>|set <key> <value>|models|setup"
+      "Expected config list|get <key>|set <key> <value>|models|setup|pixabay setup"
     ),
     exitCode: EXIT_CODES.INVALID_INPUT
   };

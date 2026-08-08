@@ -8,8 +8,8 @@ export function registerConfigCommand(program: Command): void {
   program
     .command("config")
     .description("Inspect or update user and project configuration.")
-    .argument("[action]", "list, get, set, models, setup, unsplash setup, or pixabay setup")
-    .argument("[key]", "configuration key (or `setup` for the `unsplash`/`pixabay` action)")
+    .argument("[action]", "list, get, set, models, setup, or pixabay setup")
+    .argument("[key]", "configuration key (or `setup` for the `pixabay` action)")
     .argument("[value]", "configuration value for set")
     .option("--project", "target project-local config instead of per-user config")
     .option("--root <root>", "project root for --project config")
