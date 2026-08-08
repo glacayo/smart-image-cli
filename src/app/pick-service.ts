@@ -32,7 +32,11 @@ import {
 } from "./runtime.js";
 
 export type SemanticMode = "local" | "ai";
-export type PickSource = "local" | "unsplash";
+/** External sources stay explicit; Unsplash remains until removal slices (WU6*). */
+export type PickSource = "local" | "unsplash" | "pixabay";
+
+/** Pixabay search `q` hard limit (API + CLI contract). */
+export const PIXABAY_MAX_QUERY_LENGTH = 100;
 
 export type PickOptions = SlotRequest & {
   format?: ImageFormat;
@@ -40,6 +44,11 @@ export type PickOptions = SlotRequest & {
   semantic?: SemanticMode;
   topK?: number;
   source?: PickSource;
+  /**
+   * Pixabay safesearch flag. Defaults to `true` when `--source pixabay`.
+   * Ignored for local/unsplash sources.
+   */
+  safeSearch?: boolean;
 };
 
 export type PickDeps = {
@@ -86,6 +95,11 @@ export async function pickService(
   const root = path.resolve(rootInput);
   if ((options.source ?? "local") === "unsplash") {
     return pickUnsplashService(root, options, deps);
+  }
+  // WU5a: never fall back to the local index for explicit pixabay.
+  // Search/download/used-ids land in WU5b (`pickPixabayService`).
+  if (options.source === "pixabay") {
+    return pixabaySourceNotWiredYet();
   }
   const sidecars = new SidecarStore(root);
   const injectedIndex = deps.index;
@@ -476,6 +490,30 @@ async function usedShaForSlot(root: string, options: PickOptions): Promise<Set<s
 function unsplashQuery(options: PickOptions, query: string): string {
   const categories = [options.category, ...(options.categories ?? [])].filter(Boolean);
   return [...new Set([query, ...categories])].join(" ");
+}
+
+/** Compose Pixabay `q` from query + category hints (deduped, first-seen order). */
+export function composePixabayQuery(
+  options: Pick<PickOptions, "category" | "categories">,
+  query: string
+): string {
+  const categories = [options.category, ...(options.categories ?? [])].filter(
+    (c): c is string => typeof c === "string" && c.length > 0
+  );
+  return [...new Set([query, ...categories])].join(" ");
+}
+
+/** Fail closed for explicit pixabay until WU5b wires search/download (no local fallback). */
+function pixabaySourceNotWiredYet(): ServiceOutcome {
+  return {
+    result: errorResult(
+      "pick",
+      "invalid_input",
+      "Pixabay pick is not yet available in this build",
+      { source: "pixabay" }
+    ),
+    exitCode: EXIT_CODES.INVALID_INPUT
+  };
 }
 
 function toUnsplashOrientation(

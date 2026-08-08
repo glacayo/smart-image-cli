@@ -2,12 +2,16 @@ import type { Command } from "commander";
 import { EXIT_CODES } from "../cli/exit-codes.js";
 import { emitResult, errorResult, type CliResult } from "../cli/output.js";
 import {
+  composePixabayQuery,
   pickService,
+  PIXABAY_MAX_QUERY_LENGTH,
   type PickDeps,
   type PickOptions,
   type PickSource,
   type SemanticMode
 } from "../app/pick-service.js";
+
+export { composePixabayQuery, PIXABAY_MAX_QUERY_LENGTH };
 import {
   buildTextRankerProvider,
   resolveUnsplashCredential,
@@ -33,7 +37,8 @@ const VALID_FORMATS: ReadonlySet<string> = new Set<ImageFormat>([
   "avif"
 ]);
 const VALID_SEMANTIC_MODES: ReadonlySet<string> = new Set<SemanticMode>(["local", "ai"]);
-const VALID_SOURCES: ReadonlySet<string> = new Set<PickSource>(["local", "unsplash"]);
+const VALID_SOURCES: ReadonlySet<string> = new Set<PickSource>(["local", "unsplash", "pixabay"]);
+const VALID_SAFESEARCH: ReadonlySet<string> = new Set(["true", "false"]);
 
 export function registerPickCommand(program: Command): void {
   program
@@ -51,7 +56,14 @@ export function registerPickCommand(program: Command): void {
     .option("--allow-reuse", "allow reuse for the same slot and location")
     .option("--query <text>", "free-text intent used to rank eligible candidates")
     .option("--semantic <mode>", "semantic ranking mode: local or ai")
-    .option("--source <source>", "image source: local or unsplash")
+    .option(
+      "--source <source>",
+      "image source: local or unsplash (pixabay accepted for CLI contract; not yet available in this build)"
+    )
+    .option(
+      "--safesearch <bool>",
+      "Pixabay safesearch true|false (default: true when --source pixabay; pick not yet available)"
+    )
     .option("--top-k <n>", "number of ranking/alternative entries to emit (1..10)")
     .action(async (root: string, options: Record<string, string | boolean>, command: Command) => {
       const globals = command.optsWithGlobals<{ json?: boolean }>();
@@ -149,15 +161,49 @@ function validatePickEnums(options: Record<string, string | boolean>): CliResult
 function validatePickSourceRequirements(
   options: Record<string, string | boolean>
 ): CliResult | undefined {
-  if (str(options.source) === "unsplash" && !str(options.query)?.trim()) {
+  const source = str(options.source);
+  const query = str(options.query)?.trim();
+  const safesearch = str(options.safesearch);
+
+  if (safesearch !== undefined && !VALID_SAFESEARCH.has(safesearch)) {
+    return errorResult(
+      "pick",
+      "invalid_input",
+      `--safesearch must be one of: true, false, got: "${safesearch}"`
+    );
+  }
+
+  if (source === "unsplash" && !query) {
     return errorResult("pick", "invalid_input", "--source unsplash requires --query");
   }
-  if (str(options.source) === "unsplash" && str(options.orientation) === "panorama") {
+  if (source === "unsplash" && str(options.orientation) === "panorama") {
     return errorResult(
       "pick",
       "invalid_input",
       "--source unsplash does not support --orientation panorama"
     );
+  }
+
+  if (source === "pixabay") {
+    if (!query) {
+      return errorResult("pick", "invalid_input", "--source pixabay requires --query");
+    }
+    const categories = str(options.categories)
+      ?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const category = str(options.category);
+    const composedParts: Pick<PickOptions, "category" | "categories"> = {};
+    if (category !== undefined) composedParts.category = category;
+    if (categories !== undefined) composedParts.categories = categories;
+    const composed = composePixabayQuery(composedParts, query);
+    if (composed.length > PIXABAY_MAX_QUERY_LENGTH) {
+      return errorResult(
+        "pick",
+        "invalid_input",
+        `Pixabay composed query must be ≤ ${PIXABAY_MAX_QUERY_LENGTH} characters, got: ${composed.length}`
+      );
+    }
   }
   return undefined;
 }
@@ -271,6 +317,11 @@ export function parsePickOptions(options: Record<string, string | boolean>): Pic
   if (source !== undefined) parsed.source = source as PickSource;
   const topK = intOpt(options.topK);
   if (topK !== undefined) parsed.topK = topK;
+  // Pixabay safesearch defaults true; explicit false only when flag says so.
+  if ((parsed.source ?? "local") === "pixabay") {
+    const raw = str(options.safesearch);
+    parsed.safeSearch = raw === undefined ? true : raw === "true";
+  }
   return parsed;
 }
 
@@ -280,6 +331,10 @@ export async function buildPickDeps(root: string, options: PickOptions): Promise
     return {
       resolveUnsplashCredential: () => resolveUnsplashCredential(userConfigPath)
     };
+  }
+  // Pixabay: no local ranker/index wiring (SEL-1 no cross-source fallback). WU5b adds client deps.
+  if (options.source === "pixabay") {
+    return {};
   }
   if (options.query === undefined) return {};
   if ((options.semantic ?? "local") === "ai") {
