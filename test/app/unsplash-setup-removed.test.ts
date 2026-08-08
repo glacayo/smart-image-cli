@@ -1,11 +1,14 @@
+import nodeFs from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { configService } from "../../src/app/config-service.js";
 import { readUserConfig } from "../../src/app/runtime.js";
 import type { Prompter } from "../../src/cli/prompter.js";
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const roots: string[] = [];
 const legacyKey = "legacy-unsplash-access-key-ABCDEF0123456789";
 const setSecret = "unsplash-access-key-9876543210fedcba";
@@ -41,10 +44,31 @@ function noUnsplashGuidance(blob: string): void {
   expect(lower).not.toContain("unsplash.com/developers");
   expect(blob).not.toMatch(/config unsplash setup/i);
   expect(blob).not.toContain("missing_unsplash_credential");
-  expect(lower).not.toContain("migration");
+  expect(lower).not.toMatch(/migration|private interactive|private terminal/);
 }
 
-describe("unsplash setup/config surface removed (WU6b1 intermediate)", () => {
+describe("unsplash setup/config surface removed (WU6b2)", () => {
+  it("deletes setup service + unit test and keeps tree free of imports/calls", () => {
+    expect(nodeFs.existsSync(path.join(repoRoot, "src/app/unsplash-setup-service.ts"))).toBe(false);
+    expect(nodeFs.existsSync(path.join(repoRoot, "test/app/unsplash-setup-service.test.ts"))).toBe(false);
+    const re = /unsplash-setup-service(?:\.js)?|\bunsplashSetupService\b|\bUnsplashSetupServiceOptions\b/;
+    const bad: string[] = [];
+    const walk = (d: string): void => {
+      for (const e of nodeFs.readdirSync(d, { withFileTypes: true })) {
+        const f = path.join(d, e.name);
+        if (e.isDirectory()) walk(f);
+        else if (e.name.endsWith(".ts")) {
+          const rel = path.relative(repoRoot, f).split("\\").join("/");
+          if (rel !== "test/app/unsplash-setup-removed.test.ts" && re.test(nodeFs.readFileSync(f, "utf8")))
+            bad.push(rel);
+        }
+      }
+    };
+    walk(path.join(repoRoot, "src"));
+    walk(path.join(repoRoot, "test"));
+    expect(bad).toEqual([]);
+  });
+
   it("setup unavailable with generic invalid_input; positional secret ignored; no guidance", async () => {
     const configPath = await tempConfigPath();
     const sentinel = "SAFE_SENTINEL_NEVER_LEAK_unsplash_setup";
@@ -89,6 +113,7 @@ describe("unsplash setup/config surface removed (WU6b1 intermediate)", () => {
     expect(userSet.exitCode).toBe(3);
     expect(userSet.result.reason).toBe("invalid_input");
     expect(blobOf(userSet)).not.toContain(setSecret);
+    noUnsplashGuidance(blobOf(userSet));
     const afterUser = await readUserConfig(configPath);
     expect(afterUser.unsplash.accessKey).toBeUndefined();
 
@@ -97,6 +122,7 @@ describe("unsplash setup/config surface removed (WU6b1 intermediate)", () => {
     });
     expect(whole.exitCode).toBe(3);
     expect(blobOf(whole)).not.toContain(setSecret);
+    noUnsplashGuidance(blobOf(whole));
     expect((await readUserConfig(configPath)).unsplash.accessKey).toBeUndefined();
 
     const root = await tempProjectRoot();
@@ -106,6 +132,7 @@ describe("unsplash setup/config surface removed (WU6b1 intermediate)", () => {
     });
     expect(projectSet.exitCode).toBe(3);
     expect(blobOf(projectSet)).not.toContain(setSecret);
+    noUnsplashGuidance(blobOf(projectSet));
     await expect(fs.access(path.join(root, ".img-ia", "config.json"))).rejects.toBeTruthy();
   });
 

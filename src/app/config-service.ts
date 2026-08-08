@@ -440,19 +440,8 @@ function isUnsplashConfigKey(dottedKey: string): boolean {
 }
 
 function unsplashSetBlocked(): ServiceOutcome {
-  return {
-    result: errorResult(
-      "config",
-      "invalid_input",
-      "Unsplash Access Key must be configured through the private interactive prompt. Run `smart-img config unsplash setup` in a private terminal.",
-      {
-        reason: "missing_unsplash_credential",
-        setupCommand:
-          "Run `smart-img config unsplash setup` in a private interactive terminal and paste the key when prompted."
-      }
-    ),
-    exitCode: EXIT_CODES.INVALID_INPUT
-  };
+  // Generic invalid_input only — no dead Unsplash setup/developer guidance.
+  return invalid();
 }
 
 function isPixabayConfigKey(dottedKey: string): boolean {
