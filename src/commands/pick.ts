@@ -37,7 +37,8 @@ const VALID_FORMATS: ReadonlySet<string> = new Set<ImageFormat>([
   "avif"
 ]);
 const VALID_SEMANTIC_MODES: ReadonlySet<string> = new Set<SemanticMode>(["local", "ai"]);
-const VALID_SOURCES: ReadonlySet<string> = new Set<PickSource>(["local", "unsplash", "pixabay"]);
+/** CLI-accepted sources only. Residual Unsplash service port removed in WU6c3. */
+const VALID_SOURCES: ReadonlySet<string> = new Set<string>(["local", "pixabay"]);
 const VALID_SAFESEARCH: ReadonlySet<string> = new Set(["true", "false"]);
 
 export function registerPickCommand(program: Command): void {
@@ -58,7 +59,7 @@ export function registerPickCommand(program: Command): void {
     .option("--semantic <mode>", "semantic ranking mode: local or ai")
     .option(
       "--source <source>",
-      "image source: local, unsplash, or pixabay (explicit only; no cross-source fallback)"
+      "image source: local or pixabay (explicit only; no cross-source fallback)"
     )
     .option(
       "--safesearch <bool>",
@@ -170,17 +171,6 @@ function validatePickSourceRequirements(
       "pick",
       "invalid_input",
       `--safesearch must be one of: true, false, got: "${safesearch}"`
-    );
-  }
-
-  if (source === "unsplash" && !query) {
-    return errorResult("pick", "invalid_input", "--source unsplash requires --query");
-  }
-  if (source === "unsplash" && str(options.orientation) === "panorama") {
-    return errorResult(
-      "pick",
-      "invalid_input",
-      "--source unsplash does not support --orientation panorama"
     );
   }
 
@@ -326,10 +316,6 @@ export function parsePickOptions(options: Record<string, string | boolean>): Pic
 }
 
 export async function buildPickDeps(root: string, options: PickOptions): Promise<PickDeps> {
-  // Residual unsplash enum until WU6c2: no credential wiring (resolver removed).
-  if ((options.source ?? "local") === "unsplash") {
-    return {};
-  }
   // Pixabay: credential resolver only — never local ranker/index (SEL-1).
   if (options.source === "pixabay") {
     return { resolvePixabayCredential: () => resolvePixabayApiKey(getUserConfigPath()) };

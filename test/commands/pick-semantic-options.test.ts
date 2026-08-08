@@ -82,29 +82,39 @@ describe("pick semantic CLI options", () => {
     expect(err?.message).toContain("--semantic");
   });
 
-  it("parses and validates explicit source input", () => {
-    expect(parsePickOptions({ source: "unsplash", query: "spa hero" })).toMatchObject({
-      source: "unsplash",
-      query: "spa hero"
-    });
+  it("accepts local|pixabay sources and rejects unsplash at enum validation", () => {
     expect(validatePickEnumOption("source", "local")).toBeUndefined();
-    expect(validatePickEnumOption("source", "unsplash")).toBeUndefined();
-    const err = validatePickEnumOption("source", "remote");
-    expect(err?.reason).toBe("invalid_input");
-    expect(err?.message).toContain("--source");
+    expect(validatePickEnumOption("source", "pixabay")).toBeUndefined();
+    expect(parsePickOptions({ source: "local" })).toMatchObject({ source: "local" });
+    expect(parsePickOptions({ source: "pixabay", query: "kitchen" })).toMatchObject({
+      source: "pixabay",
+      query: "kitchen"
+    });
+    const unsplash = validatePickEnumOption("source", "unsplash");
+    expect(unsplash?.reason).toBe("invalid_input");
+    expect(unsplash?.message).toMatch(/local,\s*pixabay/);
+    expect(unsplash?.message).toContain('got: "unsplash"');
+    expect(unsplash?.message).not.toMatch(/config unsplash setup|unsplash\.com\/developers|migration/i);
+    const remote = validatePickEnumOption("source", "remote");
+    expect(remote?.reason).toBe("invalid_input");
+    expect(remote?.message).toContain("--source");
   });
 
-  it("registered command requires a query for explicit Unsplash source", async () => {
-    const result = await runPickCommand("/tmp/project", "--source", "unsplash");
-
+  it("registered command rejects --source unsplash before service without migration guidance", async () => {
+    const missingQuery = await runPickCommand("/tmp/project", "--source", "unsplash");
     expect(process.exitCode).toBe(3);
-    expect(result.reason).toBe("invalid_input");
-    expect(result.message).toContain("--source unsplash requires --query");
+    expect(missingQuery.reason).toBe("invalid_input");
+    expect(missingQuery.message).toMatch(/--source must be one of:\s*local,\s*pixabay/);
+    expect(missingQuery.message).toContain('got: "unsplash"');
+    expect(missingQuery.message).not.toMatch(
+      /requires --query|config unsplash setup|unsplash\.com\/developers|migration|missing_unsplash/i
+    );
     expect(pickServiceMock).not.toHaveBeenCalled();
-  });
+    expect(buildTextRankerProviderMock).not.toHaveBeenCalled();
 
-  it("registered command rejects panorama for explicit Unsplash source", async () => {
-    const result = await runPickCommand(
+    pickServiceMock.mockClear();
+    process.exitCode = undefined;
+    const withQuery = await runPickCommand(
       "/tmp/project",
       "--source",
       "unsplash",
@@ -113,10 +123,10 @@ describe("pick semantic CLI options", () => {
       "--orientation",
       "panorama"
     );
-
     expect(process.exitCode).toBe(3);
-    expect(result.reason).toBe("invalid_input");
-    expect(result.message).toContain("does not support --orientation panorama");
+    expect(withQuery.reason).toBe("invalid_input");
+    expect(withQuery.message).toMatch(/local,\s*pixabay/);
+    expect(withQuery.message).not.toMatch(/does not support --orientation panorama/i);
     expect(pickServiceMock).not.toHaveBeenCalled();
   });
 
@@ -314,7 +324,7 @@ describe("pick semantic CLI options", () => {
       query: "wide coast"
     });
 
-    // No secret flags; help names pixabay as functional explicit source.
+    // No secret flags; help lists local|pixabay only (unsplash removed).
     const program = new Command().exitOverride().option("--json");
     registerPickCommand(program);
     const pick = program.commands.find((c) => c.name() === "pick");
@@ -323,7 +333,8 @@ describe("pick semantic CLI options", () => {
     expect(flags).not.toMatch(/api[-]?key/i);
     expect(flags).not.toMatch(/access[-]?key/i);
     expect(flags).toContain("--safesearch");
-    expect(help).toMatch(/pixabay/i);
+    expect(help).toMatch(/local,\s*pixabay|local \| pixabay|local or pixabay/i);
+    expect(help).not.toMatch(/\bunsplash\b/i);
     expect(help).toMatch(/no cross-source fallback/i);
   });
 
