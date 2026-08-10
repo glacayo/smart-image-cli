@@ -429,10 +429,9 @@ function isApiKeyConfigKey(dottedKey: string): boolean {
 /**
  * True when a dotted `config set` key targets the `unsplash` config subtree
  * (exactly `unsplash`, or any path under it such as `unsplash.accessKey`).
- * The Unsplash Access Key must be configured only through the private
- * interactive prompt (`smart-img config unsplash setup`); the generic
- * `config set` route is blocked for these keys so the key is never accepted
- * via process args, logged, or echoed back.
+ * Unsplash support has been removed. The generic `config set` route remains
+ * blocked for legacy keys so secrets are never accepted via process args,
+ * logged, or echoed back.
  */
 function isUnsplashConfigKey(dottedKey: string): boolean {
   const first = dottedKey.split(".", 1)[0] ?? "";
