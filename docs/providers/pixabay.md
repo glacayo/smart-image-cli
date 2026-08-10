@@ -80,14 +80,14 @@ Keep attribution/disclaimer with any published usage. Do not treat downloads as 
 
 ## Failures (stable exits)
 
-| Reason                            | Exit | When                                                                                                  |
-| --------------------------------- | ---- | ----------------------------------------------------------------------------------------------------- |
-| `invalid_input`                   | 3    | Bad `--source` (incl. removed `unsplash`), missing/oversized query, bad `--safesearch`, non-TTY setup |
-| `missing_pixabay_credential`      | 3    | `config set pixabay.*` blocked                                                                        |
-| `missing_pixabay_credential`      | 4    | Pick without env or user key                                                                          |
-| `no_candidate`                    | 2    | Nothing survives filters/dedupe/size                                                                  |
-| `rate_limited` / `provider_error` | 4    | 429 or transport/HTTP/JSON failure                                                                    |
-| `usage_failed`                    | 5    | Durable usage write failed after produce                                                              |
+| Reason                            | Exit | When                                                                                       |
+| --------------------------------- | ---- | ------------------------------------------------------------------------------------------ |
+| `invalid_input`                   | 3    | Unknown/unsupported `--source`, missing/oversized query, bad `--safesearch`, non-TTY setup |
+| `missing_pixabay_credential`      | 3    | `config set pixabay.*` blocked                                                             |
+| `missing_pixabay_credential`      | 4    | Pick without env or user key                                                               |
+| `no_candidate`                    | 2    | Nothing survives filters/dedupe/size                                                       |
+| `rate_limited` / `provider_error` | 4    | 429 or transport/HTTP/JSON failure                                                         |
+| `usage_failed`                    | 5    | Durable usage write failed after produce                                                   |
 
 ## Related
 
