@@ -202,45 +202,54 @@ Useful options:
 - `--format <jpg|png|webp|avif>` output format.
 - `--slot <name>` and `--location <name>` for usage tracking.
 - `--allow-reuse` only when repeat use is acceptable.
-- `--source local|unsplash`: image source. `local` is the default; `unsplash` is never used as an automatic fallback.
+- `--source local|pixabay`: image source. `local` is the default; `pixabay` is explicit only — never an automatic cross-source fallback.
+- `--safesearch true|false`: Pixabay only (default `true` when `--source pixabay`).
+- `--query` is required for `--source pixabay` (composed query ≤ 100 characters).
 
-If `pick` returns `no_candidate`, inspect `smart-img list` and loosen constraints intentionally. Do not invent a result.
+If `pick` returns `no_candidate`, inspect `smart-img list` (local) or loosen query/orientation/size constraints (Pixabay). Do not invent a result.
 
-### Unsplash configuration decision gate
+Canonical Pixabay reference: `docs/providers/pixabay.md`.
 
-`--source unsplash` requires an Unsplash Access Key. This is a separate, persistent private flow — distinct from the Ollama/vision provider setup (`smart-img config setup`).
+### Pixabay configuration decision gate
 
-| Situation | Action |
-| --- | --- |
-| User wants `pick --source unsplash` and no key is configured | Run the Unsplash setup gate below, then STOP and wait for the human to confirm. |
-| `pick --source unsplash` returns `missing_unsplash_credential` | Read the guidance fields, run the setup gate below, then STOP and wait. |
-| User already configured the key via `smart-img config unsplash setup` | Resume directly with `smart-img pick --source unsplash --query ...`. |
-| User pasted an Access Key in chat | Do not repeat, store, or use it. Redirect them to the private setup command. |
+`--source pixabay` requires a Pixabay API key. This is a separate private flow — distinct from Ollama/vision setup (`smart-img config setup`).
 
-Unsplash setup gate (agent runbook):
+| Situation                                                            | Action                                                                         |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| User wants `pick --source pixabay` and no key is configured          | Run the Pixabay setup gate below, then STOP and wait for the human to confirm. |
+| `pick --source pixabay` returns `missing_pixabay_credential`         | Read the guidance fields, run the setup gate below, then STOP and wait.        |
+| User already configured the key via `smart-img config pixabay setup` | Resume with `smart-img pick --source pixabay --query ...`.                     |
+| User pasted an API key in chat                                       | Do not repeat, store, or use it. Redirect them to the private setup command.   |
+| User asks for Unsplash / `--source unsplash`                         | Rejected by the CLI (exit 3). Direct them to `--source pixabay` or `local`.    |
 
-1. Tell the human: "Unsplash requires an Access Key. Obtain one at https://unsplash.com/developers (Your apps → New demo application)."
+Pixabay setup gate (agent runbook):
+
+1. Tell the human: "Pixabay requires an API key. Obtain one at https://pixabay.com/api/docs/."
 2. Give the private setup command and STOP — do not run it for the human and do not ask for the key:
 
    ```bash
-   smart-img config unsplash setup
+   smart-img config pixabay setup
    ```
 
 3. Wait for the human to confirm setup completed.
 4. Resume:
 
    ```bash
-   smart-img pick "<image-root>" --source unsplash --query "<intent>" --orientation landscape --width 1600 --height 900 --slot home.hero
+   smart-img pick "<image-root>" --source pixabay --query "<intent>" --orientation landscape --width 1600 --height 900 --slot home.hero
    ```
 
-Hard rules for Unsplash:
+Hard rules for Pixabay:
 
-- Never ask the user to paste the Access Key into chat, PRs, issues, or docs.
-- `smart-img config unsplash setup` is interactive/private only. There is no `--access-key` flag and no way to pass the key via process args, env, or agent buffers; the key is accepted only through the masked private prompt. In non-TTY/JSON mode it returns actionable guidance telling the human to run it in a private interactive terminal.
-- Never echo the Access Key in logs, commands, or JSON output (it is always `[REDACTED]`).
-- The key is stored only in user-scoped config (`unsplash.accessKey`), never in project config.
-- `UNSPLASH_ACCESS_KEY` is an operator-managed runtime override for `pick --source unsplash` (resolved at runtime, env > user config); it is NOT a setup input and must not be used to route the key through agent-controlled buffers.
-- Unsplash is an image source, not an AI vision provider. Do not conflate `config unsplash setup` with `config setup` (Ollama).
+- Never ask the user to paste the API key into chat, PRs, issues, or docs.
+- `smart-img config pixabay setup` is interactive/private only. No secret flag/argv path; non-TTY/JSON mode returns actionable setup guidance without prompting.
+- Never echo the key in logs, commands, or JSON (`[REDACTED]`). Never suggest `config set pixabay.apiKey`.
+- Key lives only in user-scoped config (`pixabay.apiKey`), never project config.
+- `PIXABAY_API_KEY` is an operator-managed runtime override (env > user config). It is NOT a setup input and must not be routed through agent-controlled buffers.
+- Pixabay is an image source, not an AI vision provider. Do not conflate `config pixabay setup` with `config setup` (Ollama).
+- Search always uses `image_type=photo` and default `safesearch=true`. Responses cache per project for 24 hours (key stripped). HTTP 429 → `rate_limited` with no automatic retry.
+- Already-used Pixabay ids for the same slot+location are skipped before download; exactly one image downloads per successful pick.
+- Downloads are for combined-work / customer-website use only — no standalone redistribution.
+- Do not upscale; a free-tier size limit may still succeed with a structured `resolution_cap` warning.
 
 ### 7. Optimize an image
 
