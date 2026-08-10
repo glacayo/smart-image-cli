@@ -1,13 +1,15 @@
-import fs from "node:fs/promises";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { exiftool } from "exiftool-vendored";
 import sharp from "sharp";
 import { optimizeService } from "../../src/app/optimize-service.js";
 import { rmWithRetry } from "../support/cleanup.js";
 
 const roots: string[] = [];
+const thisFile = fileURLToPath(import.meta.url);
 
 afterEach(async () => {
   sharp.cache(false);
@@ -15,21 +17,33 @@ afterEach(async () => {
   roots.length = 0;
 });
 
-// The optimization tests use the real `exiftool-vendored` singleton (via
-// `optimizeService` -> `new ExiftoolMetadata()` and the direct `exiftool`
-// import for writing tags). The singleton spawns a long-lived native ExifTool
-// process that keeps the test runner alive after the suite finishes. End it
-// once after the whole file so no zombie process remains, while keeping the
-// singleton available for every test in the file.
 afterAll(async () => {
-  await exiftool.end();
+  const { exiftool: ep } = await import("exiftool-vendored");
+  await ep.end();
 });
 
 describe("Phase 4 optimization integration", () => {
+  it("does not plant EXIF fixtures via live exiftool in this suite", () => {
+    // CRIT-004: under full-suite load, native ExifTool fixture planting pushed
+    // the orientation case past Vitest's default 5000ms. Keep planting pure JS.
+    const source = fs.readFileSync(thisFile, "utf8");
+    const codeOnly = source
+      .split(/\r?\n/)
+      .filter((line) => {
+        const trimmed = line.trimStart();
+        return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
+      })
+      .join("\n");
+    expect(codeOnly).not.toMatch(/from\s+["']exiftool-vendored["']/);
+    expect(codeOnly).not.toMatch(/\bexiftool\s*\./);
+    expect(codeOnly).toMatch(/ORIENTATION_6_JPEG_BASE64/);
+    expect(codeOnly).toMatch(/writeOrientation6Jpeg/);
+  });
+
   it("converts JPG to AVIF and leaves the source unchanged", async () => {
     const root = await tempRoot();
     const source = await writeJpeg(root, "photo.jpg", 800, 400);
-    const before = await fs.readFile(source);
+    const before = await fsp.readFile(source);
 
     const outcome = await optimizeService(root, "photo.jpg", { format: "avif" });
 
@@ -37,7 +51,7 @@ describe("Phase 4 optimization integration", () => {
     const details = outcome.result.details as { asset: { relPath: string; format: string } };
     expect(details.asset.relPath).toBe("_out/photo.avif");
     expect(details.asset.format).toBe("avif");
-    await expect(fs.readFile(source)).resolves.toEqual(before);
+    await expect(fsp.readFile(source)).resolves.toEqual(before);
   });
 
   it("strips GPS and descriptive metadata by default", async () => {
@@ -122,10 +136,17 @@ describe("Phase 4 optimization integration", () => {
     // the resize. A vacuous "orientation is undefined" assertion would pass
     // even if `.rotate()` were a no-op; this dimension-difference assertion
     // would fail.
+    //
+    // Fixture planting uses an embedded JPEG with Orientation=6 already baked
+    // in. Sharp's withExif normalizes Orientation to 1 on write, and a live
+    // exiftool.write under full-suite load is what caused CRIT-004 timeouts.
     const root = await tempRoot();
-    await writeJpeg(root, "rotated.jpg", 80, 40);
-    await writeTags(path.join(root, "rotated.jpg"), { Orientation: 6 });
-    // Control: same size, no orientation tag.
+    const rotatedPath = await writeOrientation6Jpeg(root, "rotated.jpg");
+    const planted = await sharp(rotatedPath).metadata();
+    expect(planted.orientation).toBe(6);
+    expect(planted.width).toBe(80);
+    expect(planted.height).toBe(40);
+    // Control: same stored size, no orientation tag.
     await writeJpeg(root, "control.jpg", 80, 40);
 
     const outcome = await optimizeService(root, "rotated.jpg", { format: "jpg" });
@@ -155,7 +176,7 @@ describe("Phase 4 optimization integration", () => {
 
     expect(outcome.exitCode).toBe(3);
     expect(outcome.result.reason).toBe("target_exceeds_source");
-    await expect(fs.stat(path.join(root, "_out"))).rejects.toThrow();
+    await expect(fsp.stat(path.join(root, "_out"))).rejects.toThrow();
   });
 
   it("downscales within requested bounds without distortion", async () => {
@@ -171,6 +192,21 @@ describe("Phase 4 optimization integration", () => {
   });
 });
 
+/**
+ * Tiny 80x40 JPEG with EXIF Orientation=6 already present. Generated once via
+ * sharp+exiftool offline; embedded so this suite never spawns native ExifTool
+ * just to plant a fixture (CRIT-004 root cause under full-suite load).
+ */
+const ORIENTATION_6_JPEG_BASE64 =
+  "/9j/4QAuRXhpZgAATU0AKgAAAAgAAgESAAMAAAABAAYAAAITAAMAAAABAAEAAAAAAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAoAFADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAcJ/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AnQBDGqYAAAAAAAAAAAAAAAAAAAAAAAAAAAD/2Q==";
+
+async function writeOrientation6Jpeg(root: string, rel: string): Promise<string> {
+  const file = path.join(root, rel);
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  await fsp.writeFile(file, Buffer.from(ORIENTATION_6_JPEG_BASE64, "base64"));
+  return file;
+}
+
 async function writeJpeg(
   root: string,
   rel: string,
@@ -178,7 +214,7 @@ async function writeJpeg(
   height: number
 ): Promise<string> {
   const file = path.join(root, rel);
-  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fsp.mkdir(path.dirname(file), { recursive: true });
   await sharp({ create: { width, height, channels: 3, background: "white" } })
     .jpeg()
     .toFile(file);
@@ -192,7 +228,7 @@ async function writeJpegWithPrivateExif(
   height: number
 ): Promise<string> {
   const file = path.join(root, rel);
-  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fsp.mkdir(path.dirname(file), { recursive: true });
   await sharp({ create: { width, height, channels: 3, background: "white" } })
     .jpeg()
     .withExif({
@@ -217,7 +253,7 @@ async function writeJpegWithCaptionExif(
   height: number
 ): Promise<string> {
   const file = path.join(root, rel);
-  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fsp.mkdir(path.dirname(file), { recursive: true });
   await sharp({ create: { width, height, channels: 3, background: "white" } })
     .jpeg()
     .withExif({
@@ -230,7 +266,7 @@ async function writeJpegWithCaptionExif(
 }
 
 async function writeCaptionExif(filePath: string, caption: string): Promise<void> {
-  const input = await fs.readFile(filePath);
+  const input = await fsp.readFile(filePath);
   const withCaption = await sharp(input)
     .jpeg()
     .withExif({
@@ -239,22 +275,11 @@ async function writeCaptionExif(filePath: string, caption: string): Promise<void
       }
     })
     .toBuffer();
-  await fs.writeFile(filePath, withCaption);
-}
-
-async function writeTags(filePath: string, tags: Record<string, unknown>): Promise<void> {
-  // `-n` writes numeric tag values bypassing ExifTool's PrintConv, so numeric
-  // tags like Orientation (6) are stored as the raw int instead of the
-  // print-converted string ("Rotate 90 CW"). Without `-n`, ExifTool rejects
-  // `Orientation: 6` with "Can't convert IFD0:Orientation (not in PrintConv)"
-  // and the tag is never written — which would make the rotation test vacuous
-  // (sharp would see no orientation and `.rotate()` would be a no-op).
-  await exiftool.write(filePath, tags, ["-overwrite_original", "-n"]);
-  await fs.rm(`${filePath}_original`, { force: true }).catch(() => undefined);
+  await fsp.writeFile(filePath, withCaption);
 }
 
 async function tempRoot(): Promise<string> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "smart-image-opt-"));
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "smart-image-opt-"));
   roots.push(root);
   return root;
 }
