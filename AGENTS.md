@@ -71,6 +71,8 @@ When testing installation/uninstall, use an isolated sandbox and clean it afterw
 - `doctor` checks provider config, endpoint, model, and chat/inference readiness.
 - `analyze` ignores common dependency/build/generated folders such as `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, `.nuxt`, `vendor`, `.img-ia`, and `_out`.
 - `pick` requires an existing analyzed/indexed library; if it returns `no_candidate`, inspect `smart-img list` and adjust constraints instead of inventing a result.
+- `pick --source pixabay` is an explicit external stock-photo path, separate from the local index. `local` is the default; there is **no** automatic cross-source fallback either way. Requires `PIXABAY_API_KEY` env (operator override) **>** user-config `pixabay.apiKey` (set via private `smart-img config pixabay setup`). Search uses `image_type=photo` and `safesearch=true`; responses cache per project for 24h (key-free); already-used Pixabay ids for the same slot+location are skipped before a single download; no upscale (free-tier cap may succeed with a structured `resolution_cap` warning). Downloads are for combined-work / customer-website use only under the Pixabay Content License. See `docs/providers/pixabay.md` for the full contract.
+- Pixabay is an image source, not an AI vision provider. Only Ollama is end-to-end validated for image analysis.
 
 ## Commit discipline
 

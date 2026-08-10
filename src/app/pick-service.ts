@@ -7,11 +7,6 @@ import { SidecarStore } from "../adapters/sidecar-store.js";
 import { SharpProcessor } from "../adapters/sharp-processor.js";
 import { StorageRootGuard } from "../adapters/storage-root-guard.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
-import {
-  UnsplashClient,
-  UnsplashClientError,
-  type UnsplashPhoto
-} from "../adapters/unsplash-client.js";
 import { LocalTextRanker } from "../adapters/vision/local-text-ranker.js";
 import {
   VisionProviderError,
@@ -21,18 +16,15 @@ import {
 import { planResize, type ImageFormat } from "../domain/resize-planner.js";
 import { matchSlot, type SlotAlternative, type SlotRequest } from "../domain/slot-matcher.js";
 import { sanitizeSlug } from "../domain/slug-namer.js";
-import {
-  appendUsage,
-  ensureIndexReady,
-  stableNow,
-  resolveUnsplashCredential,
-  MissingUnsplashCredentialError,
-  type ResolvedUnsplashCredential,
-  type ServiceOutcome
-} from "./runtime.js";
+import { appendUsage, ensureIndexReady, stableNow, type ServiceOutcome } from "./runtime.js";
+import { pickPixabayService, type PixabayPickDeps } from "./pixabay-pick-service.js";
 
 export type SemanticMode = "local" | "ai";
-export type PickSource = "local" | "unsplash";
+/** External source is explicit pixabay; local is the default index path. */
+export type PickSource = "local" | "pixabay";
+
+/** Pixabay search `q` hard limit (API + CLI contract). */
+export const PIXABAY_MAX_QUERY_LENGTH = 100;
 
 export type PickOptions = SlotRequest & {
   format?: ImageFormat;
@@ -40,6 +32,11 @@ export type PickOptions = SlotRequest & {
   semantic?: SemanticMode;
   topK?: number;
   source?: PickSource;
+  /**
+   * Pixabay safesearch flag. Defaults to `true` when `--source pixabay`.
+   * Ignored for local source.
+   */
+  safeSearch?: boolean;
 };
 
 export type PickDeps = {
@@ -47,15 +44,7 @@ export type PickDeps = {
   index?: SqliteIndex;
   /** Inject a semantic text ranker. Required by command wiring for AI mode; local mode falls back to LocalTextRanker. */
   textRanker?: TextRankerProvider;
-  /** Inject an Unsplash client for tests or alternate transports. */
-  unsplashClient?: Pick<UnsplashClient, "searchPhotos" | "trackDownload" | "downloadPhoto">;
-  /**
-   * Inject the Unsplash credential resolver. Production resolves env override
-   * > user config; tests inject a stub to avoid touching the real config or env.
-   * Only consulted when `unsplashClient` is not injected.
-   */
-  resolveUnsplashCredential?: () => Promise<ResolvedUnsplashCredential>;
-};
+} & Pick<PixabayPickDeps, "pixabayClient" | "resolvePixabayCredential" | "usedIds">;
 
 type RankingBlock = {
   status: "ranked";
@@ -84,9 +73,7 @@ export async function pickService(
   deps: PickDeps = {}
 ): Promise<ServiceOutcome> {
   const root = path.resolve(rootInput);
-  if ((options.source ?? "local") === "unsplash") {
-    return pickUnsplashService(root, options, deps);
-  }
+  if (options.source === "pixabay") return pickPixabayService(root, options, deps);
   const sidecars = new SidecarStore(root);
   const injectedIndex = deps.index;
   const index = injectedIndex ?? new SqliteIndex(root);
@@ -264,251 +251,15 @@ export async function pickService(
   }
 }
 
-async function pickUnsplashService(
-  root: string,
-  options: PickOptions,
-  deps: PickDeps
-): Promise<ServiceOutcome> {
-  const query = options.query?.trim();
-  if (!query) {
-    return {
-      result: errorResult("pick", "invalid_input", "--source unsplash requires --query"),
-      exitCode: EXIT_CODES.INVALID_INPUT
-    };
-  }
-  if (options.orientation === "panorama") {
-    return {
-      result: errorResult(
-        "pick",
-        "invalid_input",
-        "--source unsplash does not support --orientation panorama"
-      ),
-      exitCode: EXIT_CODES.INVALID_INPUT
-    };
-  }
-
-  const format = options.format ?? "jpg";
-  let photo: UnsplashPhoto | undefined;
-  try {
-    let client: Pick<UnsplashClient, "searchPhotos" | "trackDownload" | "downloadPhoto">;
-    if (deps.unsplashClient !== undefined) {
-      client = deps.unsplashClient;
-    } else {
-      const resolve = deps.resolveUnsplashCredential ?? resolveUnsplashCredential;
-      let credential: ResolvedUnsplashCredential;
-      try {
-        credential = await resolve();
-      } catch (error) {
-        if (error instanceof MissingUnsplashCredentialError) {
-          return missingUnsplashCredentialOutcome();
-        }
-        throw error;
-      }
-      client = new UnsplashClient({ accessKey: credential.accessKey });
-    }
-    const orientation = toUnsplashOrientation(options.orientation);
-    const photos = await client.searchPhotos({
-      query: unsplashQuery(options, query),
-      ...(orientation !== undefined ? { orientation } : {}),
-      perPage: Math.max(options.topK ?? 10, 10)
-    });
-    const eligible = photos.filter((candidate) => satisfiesRequestedSize(candidate, options));
-    const usedSha = await usedShaForSlot(root, options);
-    let bytes: Buffer | undefined;
-    let sourceSha: string | undefined;
-    for (const candidate of eligible) {
-      const candidateBytes = await client.downloadPhoto(candidate);
-      const candidateSha = await sha256Bytes(candidateBytes);
-      if (!usedSha.has(candidateSha)) {
-        photo = candidate;
-        bytes = candidateBytes;
-        sourceSha = candidateSha;
-        break;
-      }
-    }
-    if (photo === undefined || bytes === undefined || sourceSha === undefined) {
-      return {
-        result: errorResult(
-          "pick",
-          "no_candidate",
-          "No Unsplash image satisfies the requested slot constraints",
-          { source: "unsplash", query: safeRankingQuery(query) }
-        ),
-        exitCode: EXIT_CODES.NO_MATCH
-      };
-    }
-    await client.trackDownload(photo);
-    const guard = new StorageRootGuard(root);
-    const downloadPath = await writeUnsplashSource(root, guard, photo, bytes);
-    const processor = new SharpProcessor(guard);
-    const plan = planResize(
-      { width: photo.width, height: photo.height },
-      {
-        format,
-        mode: options.width && options.height ? "crop" : "resize",
-        ...(options.width !== undefined ? { width: options.width } : {}),
-        ...(options.height !== undefined ? { height: options.height } : {})
-      }
-    );
-    if (!plan.ok) {
-      return {
-        result: errorResult(
-          "pick",
-          "no_candidate",
-          "Unsplash image cannot satisfy request without upscaling",
-          {
-            source: "unsplash",
-            photoId: photo.id,
-            cause: plan.reason
-          }
-        ),
-        exitCode: EXIT_CODES.NO_MATCH
-      };
-    }
-    const output = await uniquePickOutput(root, options, sourceSha, format);
-    const asset = await processor.produce(downloadPath, output, plan);
-    const usage = {
-      sha256: sourceSha,
-      slot: options.slot ?? "default",
-      location: options.location ?? asset.path,
-      source: "pick" as const,
-      at: stableNow()
-    };
-    const index = new SqliteIndex(root);
-    try {
-      await appendUsage(root, index, usage);
-    } catch (usageError) {
-      await fs.rm(asset.path, { force: true }).catch(() => undefined);
-      return {
-        result: errorResult(
-          "pick",
-          "usage_failed",
-          "Produced Unsplash output was rolled back because durable usage recording failed",
-          {
-            source: "unsplash",
-            photoId: photo.id,
-            output: path.relative(root, asset.path).split(path.sep).join("/"),
-            error: defaultSecretRedactor.mask(
-              usageError instanceof Error ? usageError.message : String(usageError)
-            )
-          }
-        ),
-        exitCode: EXIT_CODES.FILESYSTEM_ERROR
-      };
-    } finally {
-      index.close();
-    }
-    return {
-      result: successResult("pick", {
-        manifest: {
-          source: "unsplash",
-          sha256: sourceSha,
-          photoId: photo.id,
-          photoUrl: photo.links.html,
-          imageUrl: photo.urls.full ?? photo.urls.regular ?? photo.urls.raw,
-          output: path.relative(root, asset.path).split(path.sep).join("/"),
-          width: asset.width,
-          height: asset.height,
-          format: asset.format,
-          photographerName: photo.photographerName,
-          photographerUsername: photo.photographerUsername,
-          photographerUrl: photo.photographerUrl,
-          attributionText: photo.attributionText,
-          attributionHtml: photo.attributionHtml,
-          usage
-        }
-      }),
-      exitCode: EXIT_CODES.SUCCESS
-    };
-  } catch (error) {
-    if (error instanceof UnsplashClientError) {
-      return {
-        result: errorResult("pick", "provider_error", defaultSecretRedactor.mask(error.message), {
-          source: "unsplash",
-          status: error.status
-        }),
-        exitCode: EXIT_CODES.PROVIDER_ERROR
-      };
-    }
-    throw error;
-  }
-}
-
-function missingUnsplashCredentialOutcome(): ServiceOutcome {
-  const error = new MissingUnsplashCredentialError();
-  const guidance = error.guidance;
-  return {
-    result: errorResult("pick", guidance.reason, error.message, guidance),
-    exitCode: EXIT_CODES.PROVIDER_ERROR
-  };
-}
-
-async function usedShaForSlot(root: string, options: PickOptions): Promise<Set<string>> {
-  if (options.allowReuse === true || options.slot === undefined || options.location === undefined) {
-    return new Set();
-  }
-  let raw: string;
-  try {
-    raw = await fs.readFile(path.join(root, ".img-ia", "usage.jsonl"), "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new Set();
-    throw error;
-  }
-  const used = new Set<string>();
-  for (const line of raw.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const event = JSON.parse(line) as { sha256?: unknown; slot?: unknown; location?: unknown };
-      if (
-        typeof event.sha256 === "string" &&
-        event.slot === options.slot &&
-        event.location === options.location
-      ) {
-        used.add(event.sha256);
-      }
-    } catch {
-      // Match journal replay behavior: ignore torn or malformed lines.
-    }
-  }
-  return used;
-}
-
-function unsplashQuery(options: PickOptions, query: string): string {
-  const categories = [options.category, ...(options.categories ?? [])].filter(Boolean);
-  return [...new Set([query, ...categories])].join(" ");
-}
-
-function toUnsplashOrientation(
-  orientation: PickOptions["orientation"]
-): "landscape" | "portrait" | "squarish" | undefined {
-  if (orientation === "landscape" || orientation === "portrait") return orientation;
-  if (orientation === "square") return "squarish";
-  return undefined;
-}
-
-function satisfiesRequestedSize(photo: UnsplashPhoto, options: PickOptions): boolean {
-  return (
-    (options.width === undefined || photo.width >= options.width) &&
-    (options.height === undefined || photo.height >= options.height)
+/** Compose Pixabay `q` from query + category hints (deduped, first-seen order). */
+export function composePixabayQuery(
+  options: Pick<PickOptions, "category" | "categories">,
+  query: string
+): string {
+  const categories = [options.category, ...(options.categories ?? [])].filter(
+    (c): c is string => typeof c === "string" && c.length > 0
   );
-}
-
-async function writeUnsplashSource(
-  root: string,
-  guard: StorageRootGuard,
-  photo: UnsplashPhoto,
-  bytes: Buffer
-): Promise<string> {
-  const fileName = `${sanitizeSlug(photo.id)}.jpg`;
-  const target = path.join(root, ".img-ia", "unsplash", fileName);
-  await guard.ensureParentInside(target);
-  await fs.writeFile(target, bytes, { mode: 0o600 });
-  return target;
-}
-
-async function sha256Bytes(bytes: Buffer): Promise<string> {
-  const crypto = await import("node:crypto");
-  return crypto.createHash("sha256").update(bytes).digest("hex");
+  return [...new Set([query, ...categories])].join(" ");
 }
 
 function semanticMode(options: PickOptions): { mode: SemanticMode; query: string } | undefined {

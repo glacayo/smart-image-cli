@@ -29,10 +29,7 @@ import {
   type ServiceOutcome
 } from "./runtime.js";
 import { setupService, type SetupServiceOptions } from "./setup-service.js";
-import {
-  unsplashSetupService,
-  type UnsplashSetupServiceOptions
-} from "./unsplash-setup-service.js";
+import { pixabaySetupService } from "./pixabay-setup-service.js";
 import type { Prompter } from "../cli/prompter.js";
 
 const SECRET_KEY_NAME = /(api[-_]?key|authorization|bearer|token|secret|password|credential)/i;
@@ -141,6 +138,9 @@ export async function configService(
       if (isUnsplashConfigKey(key)) {
         return unsplashSetBlocked();
       }
+      if (isPixabayConfigKey(key)) {
+        return pixabaySetBlocked();
+      }
       try {
         const next = setPath(
           structuredClone(current) as Record<string, unknown>,
@@ -181,14 +181,20 @@ export async function configService(
     };
     return setupService(setupOptions);
   }
-  if (action === "unsplash" && key === "setup") {
-    const unsplashOptions: UnsplashSetupServiceOptions = {
+  // Unsplash setup dispatch removed (WU6b1). Service module retained until WU6b2.
+  // `config unsplash setup` falls through to generic invalid_input (no guidance).
+  if (action === "pixabay" && key === "setup") {
+    // Shared optional [value] positional must not accept argv secrets.
+    // Reject any defined value before the private prompt; never inspect it.
+    if (value !== undefined) {
+      return pixabaySetBlocked();
+    }
+    return pixabaySetupService({
       ...(userConfigPath !== undefined ? { userConfigPath } : {}),
       ...(options.prompter !== undefined ? { prompter: options.prompter } : {}),
       ...(options.isTty !== undefined ? { isTty: options.isTty } : {}),
       ...(options.stderr !== undefined ? { stderr: options.stderr } : {})
-    };
-    return unsplashSetupService(unsplashOptions);
+    });
   }
   if (action === "models") {
     return listProviderModels(current, options);
@@ -218,6 +224,9 @@ export async function configService(
   if (action === "set" && key && value !== undefined) {
     if (isUnsplashConfigKey(key)) {
       return unsplashSetBlocked();
+    }
+    if (isPixabayConfigKey(key)) {
+      return pixabaySetBlocked();
     }
     try {
       const next = setPath(
@@ -420,10 +429,9 @@ function isApiKeyConfigKey(dottedKey: string): boolean {
 /**
  * True when a dotted `config set` key targets the `unsplash` config subtree
  * (exactly `unsplash`, or any path under it such as `unsplash.accessKey`).
- * The Unsplash Access Key must be configured only through the private
- * interactive prompt (`smart-img config unsplash setup`); the generic
- * `config set` route is blocked for these keys so the key is never accepted
- * via process args, logged, or echoed back.
+ * Unsplash support has been removed. The generic `config set` route remains
+ * blocked for legacy keys so secrets are never accepted via process args,
+ * logged, or echoed back.
  */
 function isUnsplashConfigKey(dottedKey: string): boolean {
   const first = dottedKey.split(".", 1)[0] ?? "";
@@ -431,15 +439,24 @@ function isUnsplashConfigKey(dottedKey: string): boolean {
 }
 
 function unsplashSetBlocked(): ServiceOutcome {
+  // Generic invalid_input only — no dead Unsplash setup/developer guidance.
+  return invalid();
+}
+
+function isPixabayConfigKey(dottedKey: string): boolean {
+  return (dottedKey.split(".", 1)[0] ?? "") === "pixabay";
+}
+
+function pixabaySetBlocked(): ServiceOutcome {
   return {
     result: errorResult(
       "config",
       "invalid_input",
-      "Unsplash Access Key must be configured through the private interactive prompt. Run `smart-img config unsplash setup` in a private terminal.",
+      "Pixabay API key must be configured through the private interactive prompt. Run `smart-img config pixabay setup` in a private terminal.",
       {
-        reason: "missing_unsplash_credential",
+        reason: "missing_pixabay_credential",
         setupCommand:
-          "Run `smart-img config unsplash setup` in a private interactive terminal and paste the key when prompted."
+          "Run `smart-img config pixabay setup` in a private interactive terminal and paste the key when prompted."
       }
     ),
     exitCode: EXIT_CODES.INVALID_INPUT
@@ -534,7 +551,7 @@ function invalid(): ServiceOutcome {
     result: errorResult(
       "config",
       "invalid_input",
-      "Expected config list|get <key>|set <key> <value>|models|setup"
+      "Expected config list|get <key>|set <key> <value>|models|setup|pixabay setup"
     ),
     exitCode: EXIT_CODES.INVALID_INPUT
   };

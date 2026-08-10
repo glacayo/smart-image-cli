@@ -70,31 +70,29 @@ smart-img --json pick ./assets --category bathroom --query "bright shower" --sem
 ```
 
 - `--query <text>` enables intent ranking over indexed metadata (`subject`, `title`, `description`, `altText`, and `categories`).
-- `--source local|unsplash` selects the image source. `local` is the default; `unsplash` is never used as an automatic fallback.
+- `--source local|pixabay` selects the image source. `local` is the default; Pixabay is explicit only — never an automatic fallback either way.
 - `--semantic local|ai` selects the ranker. Omitted `--semantic` defaults to `local` and emits a non-fatal stderr note.
 - `--top-k <1..10>` bounds emitted ranking alternatives; the default is `3`.
 - Local mode is deterministic, requires no provider, and is the default to avoid hidden spend.
 - AI mode is explicit only and sends metadata text to the configured provider. It does not send image bytes, re-read images for ranking, or re-analyze images.
 - AI ranking failures return structured `ai_ranking_failed` output with provider-error exit code `4`; there is no silent local fallback.
 
-### Picking from Unsplash
+### Picking from Pixabay
 
-Use Unsplash only when the user or agent explicitly wants a stock image instead of the local image index.
+Use Pixabay only when the user or agent **explicitly** wants a stock photo instead of the local index (`--source pixabay`). Full details: [`docs/providers/pixabay.md`](./docs/providers/pixabay.md).
 
-Unsplash requires an **Access Key** that the human must obtain and configure privately. Agents must never ask for the key in chat or handle its value.
-
-1. The human obtains an Access Key at **https://unsplash.com/developers** (Your apps → New demo application).
-2. The human runs the private setup flow once in an interactive terminal and pastes the key when prompted (it is stored in user-scoped config with restrictive file permissions, never in project config). This command is interactive/private only — there is no way to pass the key via a CLI argument:
+1. Human obtains an API key at **https://pixabay.com/api/docs/**.
+2. Human runs private setup once (interactive TTY only; no key via argv/chat):
 
    ```bash
-   smart-img config unsplash setup
+   smart-img config pixabay setup
    ```
 
-3. After setup, the agent runs `pick` with `--source unsplash`:
+3. Agent picks with an explicit source and required `--query`:
 
    ```bash
    smart-img --json pick ./assets \
-     --source unsplash \
+     --source pixabay \
      --query "modern spa bathroom hero" \
      --orientation landscape \
      --width 1600 \
@@ -102,14 +100,14 @@ Unsplash requires an **Access Key** that the human must obtain and configure pri
      --slot home.hero
    ```
 
-- `--source unsplash` requires `--query` so the request has searchable intent.
-- `smart-img config unsplash setup` never accepts the key via process args; in non-TTY/JSON mode it returns actionable guidance telling the human to run it in a private interactive terminal.
-- The `UNSPLASH_ACCESS_KEY` environment variable is honored as an operator-managed runtime override for `pick --source unsplash` (takes precedence over user config), but it is not a setup input and must not be used to route the key through agent-controlled buffers. The persistent private setup flow above is the preferred path.
-- If no key is configured, `pick --source unsplash` returns a structured `missing_unsplash_credential` error with actionable guidance (the official URL and the private setup command) and no secret.
-- Orientation and dimensions are applied before producing the final asset; `square` maps to Unsplash's `squarish` orientation.
-- The selected image is downloaded under `.img-ia/unsplash`, resized/cropped through the normal output pipeline, and emitted under `_out`.
-- The JSON manifest includes Unsplash attribution fields (`photoId`, `photoUrl`, `photographerName`, `photographerUrl`, `attributionText`, and `attributionHtml`). Keep that attribution with any published usage.
-- The command performs Unsplash download tracking before using the selected image, as required by Unsplash API guidelines.
+Key constraints:
+
+- Credential: `PIXABAY_API_KEY` env (operator override) **>** user-config `pixabay.apiKey`. Missing key → `missing_pixabay_credential` (exit 4). Never in project config, argv, logs, cache, or errors.
+- Search: `image_type=photo` (fixed), `safesearch=true` by default (`--safesearch false` to disable), composed `q` ≤ 100 chars.
+- Cache: 24h per-project under `.img-ia/pixabay/cache/` (key stripped from identity/body). HTTP 429 → `rate_limited`, no auto-retry.
+- One download per successful pick; already-used Pixabay ids for the slot+location are skipped before download.
+- No upscale; free-tier cap may succeed with a structured `resolution_cap` warning. Output under `_out`; source under `.img-ia/pixabay/`.
+- Manifest: Pixabay page URL, contributor, `Pixabay Content License`, combined-work / website-only disclaimer (no standalone redistribution).
 
 ## Planned stack
 
@@ -138,5 +136,5 @@ OpenSpec archive validation is run manually with `npm run openspec:validate -- <
 ## Roadmap
 
 1. Publish the first package release.
-2. Add explicit external image sourcing, starting with the Unsplash feature branch.
-3. Validate additional providers only after they pass the full install → configure → doctor → analyze workflow.
+2. Explicit external image sourcing via Pixabay (`--source pixabay`) is implemented; keep docs and terms compliance current.
+3. Validate additional vision providers only after they pass the full install → configure → doctor → analyze workflow.
