@@ -48,29 +48,31 @@ describe("pickService --source pixabay (WU5b3)", () => {
     expect(src).not.toMatch(/fs\.rm\(\s*r\s*,\s*\{\s*recursive:\s*true/);
   });
 
-  it("success: license/used-id/one-download/cap warning/allow-reuse/cache hit", async () => {
+  it("success: license, used-id, and one download on first pick", async () => {
     const root = await tmp();
-    const [a, b] = await Promise.all([jpeg(1280, 853, "#abc"), jpeg(1280, 853, "#def")]);
+    const body = await jpeg(1280, 853, "#abc");
     const hits = [
       hit({ id: 101, user: "alice", pageURL: "https://pixabay.com/photos/kitchen-101/" }),
       hit({ id: 101, user: "dup" }),
       hit({ id: 202, user: "bob", imageWidth: 2400, imageHeight: 1600 }),
       hit({ id: 303, imageWidth: 800, imageHeight: 600 })
     ];
-    const download = vi.fn(async (url: string) => (String(url).includes("202") ? b : a));
+    const download = vi.fn(async () => body);
     const search = vi.fn(async () => ({ hits, total: hits.length }));
-    const c = { search, download };
-    const opts = {
-      source: "pixabay" as const,
-      query: "kitchen remodel",
-      orientation: "landscape" as const,
-      width: 1200,
-      height: 800,
-      slot: "hero",
-      location: "home",
-      safeSearch: true
-    };
-    const first = await pickService(root, opts, { pixabayClient: c });
+    const first = await pickService(
+      root,
+      {
+        source: "pixabay",
+        query: "kitchen remodel",
+        orientation: "landscape",
+        width: 1200,
+        height: 800,
+        slot: "hero",
+        location: "home",
+        safeSearch: true
+      },
+      { pixabayClient: { search, download } }
+    );
     expect(first.exitCode).toBe(0);
     expect(search).toHaveBeenCalledOnce();
     expect(download).toHaveBeenCalledTimes(1);
@@ -102,7 +104,9 @@ describe("pickService --source pixabay (WU5b3)", () => {
       usedTxt + (await fs.readFile(path.join(root, ".img-ia", "usage.jsonl"), "utf8"))
     ).toContain(String(m.sha256));
     expect(JSON.stringify(first.result)).not.toContain(SECRET);
+  });
 
+  it("success: resolution_cap warning when request exceeds available rendition", async () => {
     const capDl = vi.fn(async () => jpeg(1280, 960, "#123"));
     const cap = await pickService(
       await tmp(),
@@ -125,21 +129,56 @@ describe("pickService --source pixabay (WU5b3)", () => {
       ])
     );
     expect(Number(man(cap).width)).toBeLessThanOrEqual(1280);
+  });
+
+  it("success: dedupe skips used id and allowReuse can reselect it", async () => {
+    const root = await tmp();
+    const [a, b] = await Promise.all([jpeg(1280, 853, "#abc"), jpeg(1280, 853, "#def")]);
+    const firstHit = hit({
+      id: 101,
+      user: "alice",
+      pageURL: "https://pixabay.com/photos/kitchen-101/"
+    });
+    const secondHit = hit({ id: 202, user: "bob", imageWidth: 2400, imageHeight: 1600 });
+    const download = vi.fn(async (url: string) => (String(url).includes("202") ? b : a));
+    const search = vi.fn(async () => ({
+      hits: [
+        firstHit,
+        hit({ id: 101, user: "dup" }),
+        secondHit,
+        hit({ id: 303, imageWidth: 800, imageHeight: 600 })
+      ],
+      total: 4
+    }));
+    const c = { search, download };
+    const opts = {
+      source: "pixabay" as const,
+      query: "kitchen remodel",
+      orientation: "landscape" as const,
+      width: 1200,
+      height: 800,
+      slot: "hero",
+      location: "home",
+      safeSearch: true
+    };
+    expect((await pickService(root, opts, { pixabayClient: c })).exitCode).toBe(0);
 
     download.mockClear();
-    search.mockImplementation(async () => ({ hits: [hits[0]!, hits[2]!], total: 2 }));
+    search.mockImplementation(async () => ({ hits: [firstHit, secondHit], total: 2 }));
     const second = await pickService(root, opts, { pixabayClient: c });
     expect(second.exitCode).toBe(0);
     expect(man(second).pixabayId).toBe(202);
     expect(download).toHaveBeenCalledTimes(1);
 
     download.mockClear();
-    search.mockImplementation(async () => ({ hits: [hits[0]!], total: 1 }));
+    search.mockImplementation(async () => ({ hits: [firstHit], total: 1 }));
     const reused = await pickService(root, { ...opts, allowReuse: true }, { pixabayClient: c });
     expect(reused.exitCode).toBe(0);
     expect(man(reused).pixabayId).toBe(101);
     expect(download).toHaveBeenCalledTimes(1);
+  });
 
+  it("success: search cache hit on second pick with distinct slot", async () => {
     const cRoot = await tmp();
     const s2 = vi.fn(async () => ({ hits: [hit({ id: 777 })], total: 1 }));
     const d2 = vi.fn(async () => jpeg(1280, 853, "#777"));
