@@ -12,11 +12,7 @@ import {
 } from "../app/pick-service.js";
 
 export { composePixabayQuery, PIXABAY_MAX_QUERY_LENGTH };
-import {
-  buildTextRankerProvider,
-  resolvePixabayApiKey,
-  serviceError
-} from "../app/runtime.js";
+import { buildTextRankerProvider, resolvePixabayApiKey, serviceError } from "../app/runtime.js";
 import { defaultSecretRedactor } from "../adapters/secret-redactor.js";
 import { LocalTextRanker } from "../adapters/vision/local-text-ranker.js";
 import type { ImageOrientation } from "../domain/analysis-schema.js";

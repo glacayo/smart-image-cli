@@ -77,11 +77,17 @@ export class PixabayClient {
 
   async download(imageUrl: string): Promise<Buffer> {
     const response = await this.fetchResponse(imageUrl, "Unable to download Pixabay image");
-    await this.throwIfHttpFailed(response, parseRateLimit(response.headers), "Pixabay image download failed");
+    await this.throwIfHttpFailed(
+      response,
+      parseRateLimit(response.headers),
+      "Pixabay image download failed"
+    );
     try {
       return Buffer.from(await response.arrayBuffer());
     } catch (error) {
-      throw new PixabayClientError("network", "Unable to read Pixabay image body", { cause: error });
+      throw new PixabayClientError("network", "Unable to read Pixabay image body", {
+        cause: error
+      });
     }
   }
 
@@ -94,12 +100,23 @@ export class PixabayClient {
     try {
       const parsed: unknown = await response.json();
       if (!isRecord(parsed)) {
-        throw clientError("invalid_json", "Pixabay API returned a non-object JSON body", response.status, rateLimit);
+        throw clientError(
+          "invalid_json",
+          "Pixabay API returned a non-object JSON body",
+          response.status,
+          rateLimit
+        );
       }
       return rateLimit === undefined ? { body: parsed } : { body: parsed, rateLimit };
     } catch (error) {
       if (error instanceof PixabayClientError) throw error;
-      throw clientError("invalid_json", "Pixabay API returned invalid JSON", response.status, rateLimit, error);
+      throw clientError(
+        "invalid_json",
+        "Pixabay API returned invalid JSON",
+        response.status,
+        rateLimit,
+        error
+      );
     }
   }
 
@@ -121,7 +138,12 @@ export class PixabayClient {
       throw clientError("rate_limited", "Pixabay rate limit exceeded", 429, rateLimit);
     }
     if (!response.ok) {
-      throw clientError("http", await secretFreeHttpMessage(response, prefix), response.status, rateLimit);
+      throw clientError(
+        "http",
+        await secretFreeHttpMessage(response, prefix),
+        response.status,
+        rateLimit
+      );
     }
   }
 }
@@ -159,7 +181,15 @@ function parseHit(value: unknown): PixabaySearchHit | null {
   ) {
     return null;
   }
-  const hit: PixabaySearchHit = { id, pageURL, webformatURL, largeImageURL, imageWidth, imageHeight, user };
+  const hit: PixabaySearchHit = {
+    id,
+    pageURL,
+    webformatURL,
+    largeImageURL,
+    imageWidth,
+    imageHeight,
+    user
+  };
   const fullHDURL = str(value.fullHDURL);
   const imageURL = str(value.imageURL);
   if (fullHDURL !== undefined) hit.fullHDURL = fullHDURL;
@@ -171,7 +201,8 @@ function parseRateLimit(headers: Headers): PixabayRateLimit | undefined {
   const limit = headerInt(headers, "x-ratelimit-limit");
   const remaining = headerInt(headers, "x-ratelimit-remaining");
   const resetSeconds = headerInt(headers, "x-ratelimit-reset");
-  if (limit === undefined || remaining === undefined || resetSeconds === undefined) return undefined;
+  if (limit === undefined || remaining === undefined || resetSeconds === undefined)
+    return undefined;
   return { limit, remaining, resetSeconds };
 }
 
@@ -185,7 +216,7 @@ function headerInt(headers: Headers, name: string): number | undefined {
 /** Status + Pixabay body message only — never the key-bearing request URL. */
 async function secretFreeHttpMessage(response: Response, prefix: string): Promise<string> {
   const base = `${prefix} with HTTP ${response.status}`;
-  let bodyText = "";
+  let bodyText: string;
   try {
     bodyText = await response.text();
   } catch {

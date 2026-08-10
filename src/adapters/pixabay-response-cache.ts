@@ -8,9 +8,7 @@ import { StorageRootGuard } from "./storage-root-guard.js";
 export const PIXABAY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type PixabayCacheReadResult<T = unknown> =
-  | { status: "hit"; value: T }
-  | { status: "miss" }
-  | { status: "stale" };
+  { status: "hit"; value: T } | { status: "miss" } | { status: "stale" };
 
 export type PixabayResponseCacheOptions = {
   root: string;

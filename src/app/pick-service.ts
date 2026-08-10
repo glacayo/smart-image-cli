@@ -16,12 +16,7 @@ import {
 import { planResize, type ImageFormat } from "../domain/resize-planner.js";
 import { matchSlot, type SlotAlternative, type SlotRequest } from "../domain/slot-matcher.js";
 import { sanitizeSlug } from "../domain/slug-namer.js";
-import {
-  appendUsage,
-  ensureIndexReady,
-  stableNow,
-  type ServiceOutcome
-} from "./runtime.js";
+import { appendUsage, ensureIndexReady, stableNow, type ServiceOutcome } from "./runtime.js";
 import { pickPixabayService, type PixabayPickDeps } from "./pixabay-pick-service.js";
 
 export type SemanticMode = "local" | "ai";

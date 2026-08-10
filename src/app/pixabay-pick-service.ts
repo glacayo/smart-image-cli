@@ -190,10 +190,14 @@ function isSearchPayload(value: unknown): value is PixabaySearchResult {
 
 // --- WU5b3: download / Sharp / usage / used-id / pickService wiring ---
 export type PixabayPickOptions = SlotRequest & {
-  format?: ImageFormat; query?: string; topK?: number; safeSearch?: boolean;
+  format?: ImageFormat;
+  query?: string;
+  topK?: number;
+  safeSearch?: boolean;
 };
 export type PixabayPickDeps = {
-  index?: SqliteIndex; pixabayClient?: Pick<PixabayClient, "search" | "download">;
+  index?: SqliteIndex;
+  pixabayClient?: Pick<PixabayClient, "search" | "download">;
   resolvePixabayCredential?: () => Promise<ResolvedPixabayCredential>;
   /** Test seam for used-id index; production uses `PixabayUsedIds`. */
   usedIds?: Pick<PixabayUsedIds, "readMap" | "append">;
@@ -202,41 +206,64 @@ const NO_CAND = "No Pixabay image satisfies the requested slot constraints";
 const LICENSE = "Pixabay Content License";
 const DISCLAIMER =
   "For combined-work use on the customer website only. Standalone redistribution of the original image is prohibited. Third-party rights may apply.";
-const fail = (r: string, m: string, c: number, d?: Record<string, unknown>): ServiceOutcome =>
-  ({ result: errorResult("pick", r, m, d), exitCode: c });
+const fail = (r: string, m: string, c: number, d?: Record<string, unknown>): ServiceOutcome => ({
+  result: errorResult("pick", r, m, d),
+  exitCode: c
+});
 const mask = (e: unknown) => defaultSecretRedactor.mask(e instanceof Error ? e.message : String(e));
-const rm = async (p?: string) => { if (p) await fs.rm(p, { force: true }).catch(() => undefined); };
+const rm = async (p?: string) => {
+  if (p) await fs.rm(p, { force: true }).catch(() => undefined);
+};
 const clientFail = (e: PixabayClientError) =>
-  fail(e.kind === "rate_limited" ? "rate_limited" : "provider_error", mask(e), EXIT_CODES.PROVIDER_ERROR, {
-    source: "pixabay", kind: e.kind, ...(e.status !== undefined ? { status: e.status } : {}),
-    ...(e.rateLimit !== undefined ? { rateLimit: e.rateLimit } : {})
-  });
+  fail(
+    e.kind === "rate_limited" ? "rate_limited" : "provider_error",
+    mask(e),
+    EXIT_CODES.PROVIDER_ERROR,
+    {
+      source: "pixabay",
+      kind: e.kind,
+      ...(e.status !== undefined ? { status: e.status } : {}),
+      ...(e.rateLimit !== undefined ? { rateLimit: e.rateLimit } : {})
+    }
+  );
 /** credential → candidate → one download → Sharp → usage → used-id (after usage). */
 export async function pickPixabayService(
-  root: string, options: PixabayPickOptions, deps: PixabayPickDeps = {}
+  root: string,
+  options: PixabayPickOptions,
+  deps: PixabayPickDeps = {}
 ): Promise<ServiceOutcome> {
   const query = options.query?.trim();
-  if (!query) return fail("invalid_input", "--source pixabay requires --query", EXIT_CODES.INVALID_INPUT);
+  if (!query)
+    return fail("invalid_input", "--source pixabay requires --query", EXIT_CODES.INVALID_INPUT);
   const format: ImageFormat = options.format ?? "jpg";
   try {
-    const client = deps.pixabayClient ?? new PixabayClient({
-      apiKey: (await (deps.resolvePixabayCredential ?? resolvePixabayApiKey)()).apiKey
-    });
+    const client =
+      deps.pixabayClient ??
+      new PixabayClient({
+        apiKey: (await (deps.resolvePixabayCredential ?? resolvePixabayApiKey)()).apiKey
+      });
     const usedIds = deps.usedIds ?? new PixabayUsedIds({ root });
     const usedShas = await usedShaForSlot(root, options);
-    const acquired = await acquirePixabayCandidate({
-      query, safeSearch: options.safeSearch ?? true,
-      perPage: Math.max(options.topK ?? DEFAULT_PER_PAGE, DEFAULT_PER_PAGE),
-      ...(options.orientation !== undefined ? { orientation: options.orientation } : {}),
-      ...(options.width !== undefined ? { width: options.width } : {}),
-      ...(options.height !== undefined ? { height: options.height } : {})
-    }, { client, cache: new PixabayResponseCache({ root }), usedIds, usedShas });
+    const acquired = await acquirePixabayCandidate(
+      {
+        query,
+        safeSearch: options.safeSearch ?? true,
+        perPage: Math.max(options.topK ?? DEFAULT_PER_PAGE, DEFAULT_PER_PAGE),
+        ...(options.orientation !== undefined ? { orientation: options.orientation } : {}),
+        ...(options.width !== undefined ? { width: options.width } : {}),
+        ...(options.height !== undefined ? { height: options.height } : {})
+      },
+      { client, cache: new PixabayResponseCache({ root }), usedIds, usedShas }
+    );
     if (!acquired.ok) {
-      const exit = acquired.reason === "no_candidate" ? EXIT_CODES.NO_MATCH : EXIT_CODES.PROVIDER_ERROR;
+      const exit =
+        acquired.reason === "no_candidate" ? EXIT_CODES.NO_MATCH : EXIT_CODES.PROVIDER_ERROR;
       return fail(acquired.reason, acquired.message, exit, {
         source: "pixabay",
         ...(acquired.cache !== undefined ? { cache: acquired.cache } : {}),
-        ...(acquired.candidatesFiltered !== undefined ? { candidatesFiltered: acquired.candidatesFiltered } : {}),
+        ...(acquired.candidatesFiltered !== undefined
+          ? { candidatesFiltered: acquired.candidatesFiltered }
+          : {}),
         ...(acquired.kind !== undefined ? { kind: acquired.kind } : {}),
         ...(acquired.status !== undefined ? { status: acquired.status } : {}),
         ...(acquired.rateLimit !== undefined ? { rateLimit: acquired.rateLimit } : {})
@@ -250,7 +277,11 @@ export async function pickPixabayService(
       const bytes = await client.download(url);
       const sourceSha = createHash("sha256").update(bytes).digest("hex");
       if (usedShas.has(sourceSha) && options.allowReuse !== true) {
-        return fail("no_candidate", NO_CAND, EXIT_CODES.NO_MATCH, { source: "pixabay", cache: cacheStatus, candidatesFiltered });
+        return fail("no_candidate", NO_CAND, EXIT_CODES.NO_MATCH, {
+          source: "pixabay",
+          cache: cacheStatus,
+          candidatesFiltered
+        });
       }
       const guard = new StorageRootGuard(root);
       srcPath = path.join(root, ".img-ia", "pixabay", `${hit.id}.jpg`);
@@ -259,30 +290,53 @@ export async function pickPixabayService(
       try {
         await fs.writeFile(tmp, bytes, { mode: 0o600 });
         await fs.rename(tmp, srcPath);
-      } catch (e) { await rm(tmp); throw e; }
+      } catch (e) {
+        await rm(tmp);
+        throw e;
+      }
       const plan = planResize(dims, {
-        format, mode: options.width && options.height ? "crop" : "resize",
+        format,
+        mode: options.width && options.height ? "crop" : "resize",
         ...(options.width !== undefined ? { width: Math.min(options.width, dims.width) } : {}),
         ...(options.height !== undefined ? { height: Math.min(options.height, dims.height) } : {})
       });
       if (!plan.ok) {
         await rm(srcPath);
-        return fail("no_candidate", NO_CAND, EXIT_CODES.NO_MATCH, { source: "pixabay", cache: cacheStatus, cause: plan.reason });
+        return fail("no_candidate", NO_CAND, EXIT_CODES.NO_MATCH, {
+          source: "pixabay",
+          cache: cacheStatus,
+          cause: plan.reason
+        });
       }
       outPath = await uniqueOut(root, options, sourceSha, format);
       const asset = await new SharpProcessor(guard).produce(srcPath, outPath, plan);
       const usage = {
-        sha256: sourceSha, slot: options.slot ?? "default",
-        location: options.location ?? asset.path, source: "pick" as const, at: stableNow()
+        sha256: sourceSha,
+        slot: options.slot ?? "default",
+        location: options.location ?? asset.path,
+        source: "pick" as const,
+        at: stableNow()
       };
       const injected = deps.index;
       const index = injected ?? new SqliteIndex(root);
-      try { await appendUsage(root, index, usage); }
-      catch (err) {
+      try {
+        await appendUsage(root, index, usage);
+      } catch (err) {
         await rm(asset.path);
-        return fail("usage_failed", "Produced Pixabay output was rolled back because durable usage recording failed",
-          EXIT_CODES.FILESYSTEM_ERROR, { source: "pixabay", pixabayId: hit.id, output: toPosixRel(root, asset.path), error: mask(err) });
-      } finally { if (injected === undefined) index.close(); }
+        return fail(
+          "usage_failed",
+          "Produced Pixabay output was rolled back because durable usage recording failed",
+          EXIT_CODES.FILESYSTEM_ERROR,
+          {
+            source: "pixabay",
+            pixabayId: hit.id,
+            output: toPosixRel(root, asset.path),
+            error: mask(err)
+          }
+        );
+      } finally {
+        if (injected === undefined) index.close();
+      }
       // Usage is truth; used-id index is secondary — never roll back output on index failure.
       const warnings: Array<Record<string, unknown>> = warning !== undefined ? [warning] : [];
       try {
@@ -293,18 +347,34 @@ export async function pickPixabayService(
       return {
         result: successResult("pick", {
           manifest: {
-            source: "pixabay", sha256: sourceSha, pixabayId: hit.id, pageURL: hit.pageURL, contributor: hit.user,
-            license: LICENSE, disclaimer: DISCLAIMER, imageUrl: url, output: toPosixRel(root, asset.path),
-            width: asset.width, height: asset.height, format: asset.format, usage, cache: cacheStatus,
-            ...(warnings.length > 0 ? { warnings } : {}), ...(rateLimit !== undefined ? { rateLimit } : {})
+            source: "pixabay",
+            sha256: sourceSha,
+            pixabayId: hit.id,
+            pageURL: hit.pageURL,
+            contributor: hit.user,
+            license: LICENSE,
+            disclaimer: DISCLAIMER,
+            imageUrl: url,
+            output: toPosixRel(root, asset.path),
+            width: asset.width,
+            height: asset.height,
+            format: asset.format,
+            usage,
+            cache: cacheStatus,
+            ...(warnings.length > 0 ? { warnings } : {}),
+            ...(rateLimit !== undefined ? { rateLimit } : {})
           }
         }),
         exitCode: EXIT_CODES.SUCCESS
       };
     } catch (error) {
-      await rm(outPath); await rm(srcPath);
+      await rm(outPath);
+      await rm(srcPath);
       if (error instanceof PixabayClientError) return clientFail(error);
-      return fail("filesystem_error", mask(error), EXIT_CODES.FILESYSTEM_ERROR, { source: "pixabay", pixabayId: hit.id });
+      return fail("filesystem_error", mask(error), EXIT_CODES.FILESYSTEM_ERROR, {
+        source: "pixabay",
+        pixabayId: hit.id
+      });
     }
   } catch (error) {
     if (error instanceof MissingPixabayCredentialError) {
@@ -315,27 +385,43 @@ export async function pickPixabayService(
   }
 }
 
-async function uniqueOut(root: string, o: PixabayPickOptions, sha: string, format: ImageFormat): Promise<string> {
+async function uniqueOut(
+  root: string,
+  o: PixabayPickOptions,
+  sha: string,
+  format: ImageFormat
+): Promise<string> {
   const ext = format === "jpeg" ? "jpg" : format;
   const base = sanitizeSlug(`${o.slot ?? "slot"}-${o.location ?? "asset"}-${sha.slice(0, 8)}`);
   for (let i = 1; i < 10_000; i += 1) {
     const p = path.join(root, "_out", `${base}${i === 1 ? "" : `-${i}`}.${ext}`);
-    try { await fs.stat(p); } catch { return p; }
+    try {
+      await fs.stat(p);
+    } catch {
+      return p;
+    }
   }
   throw new Error("Unable to allocate pick output path");
 }
 async function usedShaForSlot(root: string, o: PixabayPickOptions): Promise<Set<string>> {
   if (o.allowReuse === true || o.slot === undefined || o.location === undefined) return new Set();
   let raw: string;
-  try { raw = await fs.readFile(path.join(root, ".img-ia", "usage.jsonl"), "utf8"); }
-  catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return new Set(); throw e; }
+  try {
+    raw = await fs.readFile(path.join(root, ".img-ia", "usage.jsonl"), "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return new Set();
+    throw e;
+  }
   const used = new Set<string>();
   for (const line of raw.split("\n")) {
     if (!line.trim()) continue;
     try {
       const ev = JSON.parse(line) as { sha256?: unknown; slot?: unknown; location?: unknown };
-      if (typeof ev.sha256 === "string" && ev.slot === o.slot && ev.location === o.location) used.add(ev.sha256);
-    } catch { /* torn */ }
+      if (typeof ev.sha256 === "string" && ev.slot === o.slot && ev.location === o.location)
+        used.add(ev.sha256);
+    } catch {
+      /* torn */
+    }
   }
   return used;
 }
