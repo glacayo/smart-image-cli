@@ -17,14 +17,14 @@ describe("public CLI command name and package bin contract", () => {
     expect(program.name()).toBe("smart-img");
   });
 
-  it("reports the 0.2.0 runtime version", () => {
+  it("reports the 0.3.0 runtime version", () => {
     const program = createProgram();
-    expect(program.version()).toBe("0.2.0");
+    expect(program.version()).toBe("0.3.0");
   });
 
   it("package.json declares the exact two-bin contract and img points to the migration entry", () => {
     const pkg = readPackageJson();
-    expect(pkg["version"]).toBe("0.2.0");
+    expect(pkg["version"]).toBe("0.3.0");
     const bin = pkg["bin"] as Record<string, string> | undefined;
     expect(bin).toBeDefined();
     // Exactly two bins: smart-img (functional) and img (temporary migration entry).

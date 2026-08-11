@@ -19,7 +19,7 @@ export function createProgram(): Command {
   program
     .name("smart-img")
     .description("Analyze, organize, optimize, and select website image assets.")
-    .version("0.2.0")
+    .version("0.3.0")
     .option("--json", "emit a single JSON object on stdout")
     .exitOverride();
 

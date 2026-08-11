@@ -82,7 +82,7 @@ function formatHumanResult(result: CliResult): string {
 }
 
 const MIGRATION_MESSAGE =
-  "`img` is no longer a functional command. Use `smart-img` instead. (smart-image-cli@0.2.0)\n";
+  "`img` is no longer a functional command. Use `smart-img` instead. (smart-image-cli@0.3.0)\n";
 
 function isDirectRun(): boolean {
   const entry = process.argv[1];

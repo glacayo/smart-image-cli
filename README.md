@@ -8,7 +8,7 @@ Smart Image CLI is designed for developers and AI coding agents that need to wor
 
 ## Release status
 
-Smart Image CLI is ready for its first public package release as `smart-image-cli@0.2.0`.
+Smart Image CLI is prepared as a `0.3.0` release candidate. `0.3.0` is not published yet; the package version is bumped to `0.3.0` in-tree pending publication, tagging, and release.
 
 The validated workflow covers:
 
@@ -18,10 +18,11 @@ The validated workflow covers:
 - local indexing and sidecars
 - image listing, stats, optimization, picking, and usage tracking
 - dependency/build directory ignores during recursive analysis
+- explicit Pixabay stock-photo sourcing via `smart-img pick --source pixabay` (separate from the local index; no automatic fallback)
 
-Only Ollama is end-to-end validated for image analysis in this release. OpenRouter, Gemini, and other provider presets should be treated as experimental until they pass the same install → configure → doctor → analyze workflow.
+Only Ollama is end-to-end validated for image analysis in this release. OpenRouter, Gemini, and other provider presets should be treated as experimental until they pass the same install → configure → doctor → analyze workflow. Pixabay is an explicit external image source, not an AI vision provider.
 
-> **Migration note:** `img` is a temporary **failing** migration stub that prints a redirect message to stderr and exits non-zero; it does not run any CLI functionality. `smart-img` is the only functional command in `smart-image-cli@0.2.0`.
+> **Migration note:** `img` is a temporary **failing** migration stub that prints a redirect message to stderr and exits non-zero; it does not run any CLI functionality. `smart-img` is the only functional command in `smart-image-cli@0.3.0`.
 
 ## What it does
 
