@@ -8,7 +8,12 @@ Smart Image CLI is designed for developers and AI coding agents that need to wor
 
 ## Release status
 
-Smart Image CLI is prepared as a `0.3.0` release candidate. `0.3.0` is not published yet; the package version is bumped to `0.3.0` in-tree pending publication, tagging, and release.
+Smart Image CLI `0.3.0` is the current release. Install or upgrade from `0.2.0` with:
+
+```bash
+npm install -g smart-image-cli@0.3.0
+smart-img --version
+```
 
 The validated workflow covers:
 
@@ -114,16 +119,16 @@ Key constraints:
 
 Run `smart-img` against a narrow image-only root such as `./CUSTOMER-IMAGES` (the managed working copy where you copy customer images for the tool), not the whole website. `analyze` may rename/move files inside that root into category folders; use `--dry-run` to preview.
 
-| Path | Created by | Purpose |
-|------|-----------|---------|
-| `<category>/` | `analyze` | Organized local library |
-| `.img-ia/config.json` | optional | Project config (no secrets) |
-| `.img-ia/index.sqlite` (+ WAL/SHM) | `analyze` | Queryable derived index |
-| `.img-ia/sidecars/<sha>.json` | `analyze` | Durable per-image record (source of truth) |
-| `.img-ia/usage.jsonl` | `pick`/`mark-used` | Usage journal |
-| `.img-ia/pixabay/<id>.jpg` | `pick --source pixabay` | Downloaded Pixabay source |
-| `.img-ia/pixabay/cache/<hash>.json` | `pick --source pixabay` | 24h search cache (key-stripped) |
-| `_out/<slug>[-NNN].<format>` | `optimize`, `pick` | Website-ready output |
+| Path                                | Created by              | Purpose                                    |
+| ----------------------------------- | ----------------------- | ------------------------------------------ |
+| `<category>/`                       | `analyze`               | Organized local library                    |
+| `.img-ia/config.json`               | optional                | Project config (no secrets)                |
+| `.img-ia/index.sqlite` (+ WAL/SHM)  | `analyze`               | Queryable derived index                    |
+| `.img-ia/sidecars/<sha>.json`       | `analyze`               | Durable per-image record (source of truth) |
+| `.img-ia/usage.jsonl`               | `pick`/`mark-used`      | Usage journal                              |
+| `.img-ia/pixabay/<id>.jpg`          | `pick --source pixabay` | Downloaded Pixabay source                  |
+| `.img-ia/pixabay/cache/<hash>.json` | `pick --source pixabay` | 24h search cache (key-stripped)            |
+| `_out/<slug>[-NNN].<format>`        | `optimize`, `pick`      | Website-ready output                       |
 
 - `.img-ia/` is internal state; `_out/` is consumable output; category dirs are the managed local library.
 - No automatic local↔Pixabay fallback, no overwrite, no upscale, no automatic cleanup.
@@ -155,6 +160,5 @@ OpenSpec archive validation is run manually with `npm run openspec:validate -- <
 
 ## Roadmap
 
-1. Publish the first package release.
-2. Explicit external image sourcing via Pixabay (`--source pixabay`) is implemented; keep docs and terms compliance current.
-3. Validate additional vision providers only after they pass the full install → configure → doctor → analyze workflow.
+1. Keep the published `0.3.0` package, docs, and Pixabay terms compliance current.
+2. Validate additional vision providers only after they pass the full install → configure → doctor → analyze workflow.
