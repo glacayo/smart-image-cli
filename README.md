@@ -23,14 +23,14 @@ Only Ollama is end-to-end validated for image analysis in this release. OpenRout
 
 > **Migration note:** `img` is a temporary **failing** migration stub that prints a redirect message to stderr and exits non-zero; it does not run any CLI functionality. `smart-img` is the only functional command in `smart-image-cli@0.2.0`.
 
-## What it will do
+## What it does
 
 - Analyze image folders recursively with AI.
-- Rename and organize images by detected category.
-- Store local metadata and indexes inside the project image root.
-- Optimize images for web delivery.
+- Rename and organize images by detected category inside the chosen root.
+- Store local metadata and indexes inside the image root under `.img-ia/`.
+- Optimize images for web delivery into `_out/`.
 - Resize and crop images for website slots.
-- Select the best available image for a requested section.
+- Select the best available image for a requested section from the local index or Pixabay.
 - Track where images were used so agents avoid repeating assets in the same slot.
 
 ## Provider setup and model selection
@@ -108,6 +108,25 @@ Key constraints:
 - One download per successful pick; already-used Pixabay ids for the slot+location are skipped before download.
 - No upscale; free-tier cap may succeed with a structured `resolution_cap` warning. Output under `_out`; source under `.img-ia/pixabay/`.
 - Manifest: Pixabay page URL, contributor, `Pixabay Content License`, combined-work / website-only disclaimer (no standalone redistribution).
+
+## Filesystem layout
+
+Run `smart-img` against a narrow image-only root such as `./CUSTOMER-IMAGES` (the managed working copy where you copy customer images for the tool), not the whole website. `analyze` may rename/move files inside that root into category folders; use `--dry-run` to preview.
+
+| Path | Created by | Purpose |
+|------|-----------|---------|
+| `<category>/` | `analyze` | Organized local library |
+| `.img-ia/config.json` | optional | Project config (no secrets) |
+| `.img-ia/index.sqlite` (+ WAL/SHM) | `analyze` | Queryable derived index |
+| `.img-ia/sidecars/<sha>.json` | `analyze` | Durable per-image record (source of truth) |
+| `.img-ia/usage.jsonl` | `pick`/`mark-used` | Usage journal |
+| `.img-ia/pixabay/<id>.jpg` | `pick --source pixabay` | Downloaded Pixabay source |
+| `.img-ia/pixabay/cache/<hash>.json` | `pick --source pixabay` | 24h search cache (key-stripped) |
+| `_out/<slug>[-NNN].<format>` | `optimize`, `pick` | Website-ready output |
+
+- `.img-ia/` is internal state; `_out/` is consumable output; category dirs are the managed local library.
+- No automatic local↔Pixabay fallback, no overwrite, no upscale, no automatic cleanup.
+- The Pixabay manifest is returned in CLI output, not persisted as a file.
 
 ## Planned stack
 

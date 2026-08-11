@@ -34,12 +34,36 @@ The portable skill lives at:
 - For tests, copy a small sample into a sandbox first.
 - Do not modify `CUSTOMER-IMAGES` unless the user explicitly chose that exact folder for organization.
 - Prefer the narrowest correct image root instead of the whole website/project folder.
+- `CUSTOMER-IMAGES/` is the canonical managed **working copy** where the human/agent copies customer images for smart-img; it is not the customer's only/original source archive. Run image-library commands against this narrow root.
+- `analyze` may rename/move files inside this managed root into category folders. Use `--dry-run` to preview without writing.
 
 Example preferred root:
 
 ```bash
 smart-img analyze "./CUSTOMER-IMAGES"
 ```
+
+## Filesystem convention
+
+smart-img writes a predictable, command-dependent set of paths under the chosen root. Do not invent alternate roots, state folders, or output folders.
+
+| Path | Created by | Purpose |
+|------|-----------|---------|
+| `<category>/` | `analyze` | Managed local library (organized images) |
+| `.img-ia/config.json` | optional manual/`config set` | Project config; MUST NOT hold secrets |
+| `.img-ia/index.sqlite` (+ WAL/SHM) | `analyze` | Derived queryable index (rebuildable from sidecars) |
+| `.img-ia/sidecars/<sha>.json` | `analyze` | Durable per-image record (source of truth) |
+| `.img-ia/usage.jsonl` | `pick`/`mark-used` | Usage journal (only after usage actions) |
+| `.img-ia/pixabay/<id>.jpg` | `pick --source pixabay` | Downloaded Pixabay source |
+| `.img-ia/pixabay/cache/<hash>.json` | `pick --source pixabay` | 24h search cache (key-stripped) |
+| `.img-ia/pixabay/used-ids.jsonl` | `pick --source pixabay` | Used Pixabay ids per slot+location |
+| `_out/<slug>[-NNN].<format>` | `optimize`, `pick` | Website-ready generated assets |
+
+- `.img-ia/` is internal state; `_out/` is consumable output; category dirs are the managed local library.
+- `.atl/` is a test/agent sandbox convention — smart-img never creates or reads it.
+- No automatic local↔Pixabay fallback. No overwrite. No upscale. No general automatic cleanup of generated/cached files.
+- The Pixabay manifest is returned in CLI output, not persisted as a separate file.
+- Full per-path detail: `.agents/skills/smart-image-cli/SKILL.md` → Filesystem layout.
 
 ## Verification expectations
 

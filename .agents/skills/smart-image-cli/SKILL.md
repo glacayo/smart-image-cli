@@ -99,6 +99,45 @@ By default, `analyze` skips dependency/build/generated folders such as:
 - `.img-ia`
 - `_out`
 
+## Filesystem layout
+
+smart-img writes a small, predictable set of paths under the chosen image root. Do not invent alternate roots, alternate state folders, or alternate output folders.
+
+### Canonical working copy: `CUSTOMER-IMAGES/`
+
+`CUSTOMER-IMAGES/` is the canonical managed working copy where the human or agent copies customer images for smart-img to process. It is **not** the customer's only or original source archive. Run every image-library command against this narrow root (or an equivalent narrow image-only folder), never against the whole website/project.
+
+`analyze` may rename and move files inside this managed root into category folders (`<category>/<suggested-slug>-001.<ext>`; collisions use a sequence/hash). Use `--dry-run` to preview the plan without moving files or writing analysis state.
+
+### Paths under the root
+
+| Path | Created by | Purpose |
+|------|-----------|---------|
+| `<category>/` | `analyze` | Managed local library — images organized by detected category |
+| `.img-ia/config.json` | optional, manual or `config set` | Project config (taxonomy extensions, `outputDirs`). MUST NOT hold secrets. |
+| `.img-ia/index.sqlite` (+ `-wal`, `-shm`) | `analyze` | Queryable derived index (rebuildable from sidecars) |
+| `.img-ia/sidecars/<sha256>.json` | `analyze` | Durable per-image analysis record (source of truth) |
+| `.img-ia/usage.jsonl` | `pick` / `mark-used` | Append-only slot usage journal (only after usage actions) |
+| `.img-ia/pixabay/<id>.jpg` | `pick --source pixabay` | Downloaded Pixabay source image |
+| `.img-ia/pixabay/cache/<hash>.json` | `pick --source pixabay` | 24h search-response cache (key-stripped) |
+| `.img-ia/pixabay/used-ids.jsonl` | `pick --source pixabay` | Already-used Pixabay ids per slot+location |
+| `_out/<slug>[-NNN].<format>` | `optimize`, `pick` | Website-ready generated assets (consumable output) |
+
+### What each area means
+
+- **Category directories** (`<category>/`) are the managed local library — analyzed, organized images. This is what `list`/`pick`/`optimize` operate on.
+- **`.img-ia/`** is internal state. Sidecars are the durable source of truth; the SQLite index is a derived view rebuildable from sidecars. Do not hand-edit, commit, or delete these expecting cleanup.
+- **`_out/`** is consumable output — website-ready assets produced by `optimize` and `pick`. Copy these into the website build; do not treat them as source material.
+- **`.atl/`** is a test/agent sandbox convention used by SDD tooling. smart-img never creates or reads `.atl/`.
+
+### Rules
+
+- Creation is **command-dependent**: `analyze` creates sidecars + index + category dirs; `pick`/`mark-used` create usage state; `optimize`/`pick` create `_out`; only `pick --source pixabay` creates `.img-ia/pixabay/` files. No command creates all paths at once.
+- There is **no automatic local↔Pixabay fallback**. `--source` is explicit; a failed source reports the specific failure and never retries the other source.
+- There is **no overwrite or upscale**. Existing files are never overwritten (collisions produce a unique name); images are never enlarged beyond source dimensions.
+- The Pixabay manifest (page URL, contributor, license, disclaimer) is returned in **CLI output**, not persisted as a separate file.
+- There is **no general automatic cleanup** of generated or cached files. `_out` assets, `.img-ia` state, and Pixabay cache persist until manually removed.
+
 ## Standard workflow
 
 ### 1. Confirm installation
