@@ -1,0 +1,105 @@
+name: Bug report
+description: Report reproducible incorrect behavior in Smart Image CLI.
+title: "[Bug]: "
+labels:
+  - type:bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Remove API keys, credentials, customer names, private paths, and image contents before submitting.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and its impact.
+      placeholder: Smart Image CLI failed while...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest repeatable sequence using sanitized paths and inputs.
+      placeholder: |
+        1. Configure...
+        2. Run...
+        3. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Explain what should have happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and error output
+      description: Include sanitized output, exit codes, and whether retrying changes the result.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Smart Image CLI version
+      description: Run `smart-img --version`.
+      placeholder: 0.3.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: command
+    attributes:
+      label: Affected command
+      options:
+        - analyze
+        - optimize
+        - pick
+        - mark-used
+        - list
+        - stats
+        - config
+        - doctor
+        - installation or startup
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add sanitized logs or relevant details that do not expose customer data or credentials.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched open and closed issues for an existing report.
+          required: true
+        - label: I removed credentials, private paths, customer information, and image contents.
+          required: true
