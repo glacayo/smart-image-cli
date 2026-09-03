@@ -1,0 +1,96 @@
+name: Feature request
+description: Propose a product or workflow improvement for Smart Image CLI.
+title: "[Feature]: "
+labels:
+  - type:feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an improvement. Describe the user outcome rather than only an implementation. Remove API keys, credentials, customer names, private paths, and image contents before submitting.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or limitation
+      description: Explain the current limitation and who it affects.
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: Describe a concrete workflow where this improvement provides value.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-outcome
+    attributes:
+      label: Proposed outcome
+      description: Describe the desired behavior without requiring a specific implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that would demonstrate the improvement works.
+      placeholder: |
+        - [ ] Given..., when..., then...
+        - [ ] Existing behavior remains...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: affected-area
+    attributes:
+      label: Affected area
+      options:
+        - analyze
+        - optimize
+        - pick and image selection
+        - usage tracking
+        - output naming
+        - provider configuration
+        - documentation
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe current workarounds or other approaches considered.
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Smart Image CLI version
+      description: Run `smart-img --version` when the request relates to current behavior.
+      placeholder: x.y.z
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add sanitized evidence or design considerations without exposing private data.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched open and closed issues for an existing proposal.
+          required: true
+        - label: I removed API keys, credentials, private paths, customer information, and image contents.
+          required: true
